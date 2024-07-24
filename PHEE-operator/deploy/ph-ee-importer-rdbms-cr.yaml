@@ -1,0 +1,27 @@
+apiVersion: example.com/v1
+kind: PhEeImporterRdbms
+metadata:
+  name: sample-ph-ee-importer-rdbms
+  namespace: paymenthub
+spec:
+  replicas: 1
+  image: docker.io/openmf/ph-ee-importer-rdbms:v1.7.1
+  springProfilesActive: local,tenantsConnection
+  datasource:
+    username: mifos
+    password: password
+    host: operationsmysql
+    port: 3306
+    schema: tenants
+  logging:
+    levelRoot: INFO
+    patternConsole: "%d{dd-MM-yyyy HH:mm:ss.SSS} %magenta([%thread]) %highlight(%-5level) %logger.%M - %msg%n"
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512M
+    requests:
+      cpu: 100m
+      memory: 256M
+  javaToolOptions: "-Xmx256M"
+  bucketName: paymenthub-ee-dev
