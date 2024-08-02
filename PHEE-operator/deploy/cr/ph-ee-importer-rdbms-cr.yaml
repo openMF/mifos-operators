@@ -1,4 +1,4 @@
-apiVersion: example.com/v1
+apiVersion: my.custom.group/v1
 kind: PhEeImporterRdbms
 metadata:
   name: sample-ph-ee-importer-rdbms
@@ -19,9 +19,9 @@ spec:
   resources:
     limits:
       cpu: 500m
-      memory: 512M
+      memory: 512Mi
     requests:
       cpu: 100m
-      memory: 256M
+      memory: 256Mi
   javaToolOptions: "-Xmx256M"
   bucketName: paymenthub-ee-dev
