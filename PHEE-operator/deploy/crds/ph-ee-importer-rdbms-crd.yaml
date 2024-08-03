@@ -1,13 +1,23 @@
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  name: ph-ee-importer-rdbmses.example.com
+  name: pheeimporterrdbmses.my.custom.group # Use the current naming convention
 spec:
-  group: example.com
+  group: my.custom.group
+  names:
+    kind: PhEeImporterRdbms
+    listKind: PhEeImporterRdbmsList
+    plural: pheeimporterrdbmses
+    singular: pheeimporterrdbms
+    shortNames:  # Add short names if required
+      - peeirdbms
+  scope: Namespaced
   versions:
-    - name: v1
+    - name: v1 
       served: true
       storage: true
+      subresources:
+        status: {}  # Ensure status is defined as a subresource
       schema:
         openAPIV3Schema:
           type: object
@@ -62,11 +72,14 @@ spec:
                   type: string
                 bucketName:
                   type: string
-  scope: Namespaced
-  names:
-    plural: ph-ee-importer-rdbmses
-    singular: ph-ee-importer-rdbms
-    kind: PhEeImporterRdbms
-    shortNames:
-      - peeirdbms
-
+            status:
+              type: object
+              properties:
+                availableReplicas:
+                  type: integer
+                errorMessage:
+                  type: string
+                lastAppliedImage:
+                  type: string
+                ready:
+                  type: boolean

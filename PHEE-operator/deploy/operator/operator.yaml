@@ -1,0 +1,135 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: phee-importer-operator-sa
+  namespace: default
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: phee-importer-operator
+  namespace: default
+  labels:
+    app: phee-importer-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: phee-importer-operator
+  template:
+    metadata:
+      labels:
+        app: phee-importer-operator
+    spec:
+      containers:
+        - name: operator
+          image: ph-ee-importer-rdbms-operator:latest # Use the locally built image
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: WATCH_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: LOG_LEVEL
+              value: INFO # You can change this to DEBUG or another level as needed
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+      serviceAccountName: phee-importer-operator-sa
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: phee-importer-operator-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - deployments
+  - services
+  - serviceaccounts
+  - configmaps
+  - secrets
+  - pods
+  verbs:
+  - '*'
+- apiGroups:
+  - "apps"
+  resources:
+  - deployments
+  - services
+  - configmaps
+  verbs:
+  - '*'
+- apiGroups:
+  - "apiextensions.k8s.io"
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - '*'
+- apiGroups:
+  - "my.custom.group"
+  resources:
+  - pheeimporterrdbmses
+  - pheeimporterrdbmses/status
+  verbs:
+  - '*' 
+- apiGroups:
+  - "rbac.authorization.k8s.io"
+  resources:
+  - roles
+  - rolebindings
+  - clusterroles
+  - clusterrolebindings
+  verbs:
+  - '*'
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: phee-importer-operator-role-binding
+subjects:
+  - kind: ServiceAccount
+    name: phee-importer-operator-sa
+    namespace: default
+roleRef:
+  kind: ClusterRole
+  name: phee-importer-operator-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: phee-importer-operator-role
+  namespace: default
+rules:
+- apiGroups:
+  - my.custom.group
+  resources:
+  - pheeimporterrdbmses
+  - pheeimporterrdbmses/status
+  verbs:
+  - '*' 
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: phee-importer-operator-role-binding
+  namespace: default
+subjects:
+  - kind: ServiceAccount
+    name: phee-importer-operator-sa
+    namespace: default
+roleRef:
+  kind: Role
+  name: phee-importer-operator-role
+  apiGroup: rbac.authorization.k8s.io

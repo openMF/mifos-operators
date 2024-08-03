@@ -1,25 +1,30 @@
-package com.example.operator;
-
+package com.example;
+ 
+// Kubernetes API model imports
 import io.fabric8.kubernetes.api.model.*;
+import io.fabric8.kubernetes.api.model.apps.*;
 import io.fabric8.kubernetes.api.model.rbac.*;
+
+// Kubernetes client imports
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.dsl.Resource;
-import io.fabric8.kubernetes.api.model.apps.Deployment;
-import io.fabric8.kubernetes.api.model.apps.DeploymentSpec;
-import io.fabric8.kubernetes.api.model.ConfigMap;
-import io.fabric8.kubernetes.api.model.ConfigMapBuilder;
-import io.fabric8.kubernetes.api.model.Secret;
-import io.fabric8.kubernetes.api.model.SecretBuilder; 
+
+// Operator SDK imports
 import io.javaoperatorsdk.operator.api.reconciler.Context;
 import io.javaoperatorsdk.operator.api.reconciler.ControllerConfiguration;
 import io.javaoperatorsdk.operator.api.reconciler.Reconciler;
 import io.javaoperatorsdk.operator.api.reconciler.UpdateControl;
-import java.util.concurrent.TimeUnit;
-import com.example.PhEeImporterRdbms;
+
+// Logging imports
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Inject;
+// Custom classes
+import com.example.customresource.PhEeImporterRdbms;
+import com.example.utils.LoggingUtil;
+import com.example.utils.StatusUpdateUtil;
+
+// utils
 import java.util.*;
 
 
@@ -28,35 +33,39 @@ public class PhEeImporterRdbmsController implements Reconciler<PhEeImporterRdbms
 
     private static final Logger log = LoggerFactory.getLogger(PhEeImporterRdbmsController.class);
 
-    @Inject
-    private KubernetesClient kubernetesClient;
+    private final KubernetesClient kubernetesClient;
+
+    public PhEeImporterRdbmsController(KubernetesClient kubernetesClient) {
+        this.kubernetesClient = kubernetesClient;
+    }
 
     @Override
     public UpdateControl<PhEeImporterRdbms> reconcile(PhEeImporterRdbms resource, Context<PhEeImporterRdbms> context) {
-        log.info("Reconciling PhEeImporterRdbms: {}", resource.getMetadata().getName());
+        LoggingUtil.logResourceDetails(resource);
 
-        // calling all the reconciliation methods and providing resource as an argument
-        try {
-            reconcileDeployment(resource); 
-            reconcileSecret(resource);
-            reconcileConfigMap(resource);
+        try { 
+
             reconcileServiceAccount(resource);
+            reconcileSecret(resource); 
             reconcileClusterRole(resource);
             reconcileClusterRoleBinding(resource);
             reconcileRole(resource);
-            reconcileRoleBinding(resource);
+            reconcileRoleBinding(resource); 
+            reconcileDeployment(resource);
 
-            return UpdateControl.noUpdate();
+            return StatusUpdateUtil.updateStatus(kubernetesClient, resource, resource.getSpec().getReplicas(), resource.getSpec().getImage(), true, "");
+
         } catch (Exception e) {
-            log.error("Error during reconciliation", e);
-            return UpdateControl.noUpdate();
+            LoggingUtil.logError("Error during reconciliation", e);
+            return StatusUpdateUtil.updateErrorStatus(kubernetesClient, resource, resource.getSpec().getImage(), e);
         }
     }
 
-
-    //Below are all the resource reconciliation methods
     private void reconcileDeployment(PhEeImporterRdbms resource) {
+        log.info("Reconciling Deployment for resource: {}", resource.getMetadata().getName());
         Deployment deployment = createDeployment(resource);
+        log.info("Created Deployment spec: {}", deployment);
+
         Resource<Deployment> deploymentResource = kubernetesClient.apps().deployments()
                 .inNamespace(resource.getMetadata().getNamespace())
                 .withName(resource.getMetadata().getName());
@@ -70,8 +79,109 @@ public class PhEeImporterRdbmsController implements Reconciler<PhEeImporterRdbms
         }
     }
 
+    private Deployment createDeployment(PhEeImporterRdbms resource) {
+        log.info("Creating Deployment spec for resource: {}", resource.getMetadata().getName());
+
+        // Define labels for the Deployment and Pod templates
+        Map<String, String> labels = new HashMap<>();
+        labels.put("app", resource.getMetadata().getName());
+        labels.put("managed-by", "ph-ee-importer-operator"); // Optional label for identifying managed resources
+
+        // Build the container with environment variables, resources, and volume mounts
+        Container container = new ContainerBuilder()
+            .withName(resource.getMetadata().getName())
+            .withImage(resource.getSpec().getImage())
+            .withEnv(createEnvironmentVariables(resource))
+            .withResources(createResourceRequirements(resource))
+            .withVolumeMounts(new VolumeMountBuilder()
+                .withName("ph-ee-config")
+                .withMountPath("/config")
+                .build())
+            .build();
+
+        // Create PodSpec with the defined container and volumes
+        PodSpec podSpec = new PodSpecBuilder()
+            .withContainers(container)
+            .withVolumes(new VolumeBuilder()
+                .withName("ph-ee-config")
+                .withConfigMap(new ConfigMapVolumeSourceBuilder()
+                    .withName("ph-ee-config")
+                    .build())
+                .build())
+            .build();
+
+        // Build the PodTemplateSpec with metadata and spec
+        PodTemplateSpec podTemplateSpec = new PodTemplateSpecBuilder()
+            .withNewMetadata()
+                .withLabels(labels)
+            .endMetadata()
+            .withSpec(podSpec)
+            .build();
+
+        // Define the DeploymentSpec with replicas, selector, and template
+        DeploymentSpec deploymentSpec = new DeploymentSpecBuilder()
+            .withReplicas(resource.getSpec().getReplicas())
+            .withSelector(new LabelSelectorBuilder()
+                .withMatchLabels(labels)
+                .build())
+            .withTemplate(podTemplateSpec)
+            .build();
+
+        // Create Deployment metadata with owner references
+        ObjectMeta metadata = new ObjectMetaBuilder()
+            .withName(resource.getMetadata().getName())
+            .withNamespace(resource.getMetadata().getNamespace())
+            .withLabels(labels)
+            .withOwnerReferences(createOwnerReferences(resource))
+            .build();
+
+        // Build the final Deployment object
+        return new DeploymentBuilder()
+            .withMetadata(metadata)
+            .withSpec(deploymentSpec)
+            .build();
+    }
+
+    // Helper method to create environment variables
+    private List<EnvVar> createEnvironmentVariables(PhEeImporterRdbms resource) {
+        return Arrays.asList(
+            new EnvVar("SPRING_PROFILES_ACTIVE", resource.getSpec().getSpringProfilesActive(), null),
+            new EnvVar("DATASOURCE_CORE_USERNAME", resource.getSpec().getDatasource().getUsername(), null),
+            new EnvVar("DATASOURCE_CORE_PASSWORD", null, new EnvVarSourceBuilder().withNewSecretKeyRef("database-password", "importer-rdbms-secret", false).build()),
+            new EnvVar("DATASOURCE_CORE_HOST", resource.getSpec().getDatasource().getHost(), null),
+            new EnvVar("DATASOURCE_CORE_PORT", String.valueOf(resource.getSpec().getDatasource().getPort()), null),
+            new EnvVar("DATASOURCE_CORE_SCHEMA", resource.getSpec().getDatasource().getSchema(), null),
+            new EnvVar("LOGGING_LEVEL_ROOT", resource.getSpec().getLogging().getLevelRoot(), null),
+            new EnvVar("LOGGING_PATTERN_CONSOLE", resource.getSpec().getLogging().getPatternConsole(), null),
+            new EnvVar("JAVA_TOOL_OPTIONS", resource.getSpec().getJavaToolOptions(), null),
+            new EnvVar("APPLICATION_BUCKET_NAME", resource.getSpec().getBucketName(), null),
+            new EnvVar("CLOUD_AWS_REGION_STATIC", null, new EnvVarSourceBuilder().withNewSecretKeyRef("aws-region", "bulk-processor-secret", false).build()),
+            new EnvVar("AWS_ACCESS_KEY", null, new EnvVarSourceBuilder().withNewSecretKeyRef("aws-access-key", "bulk-processor-secret", false).build()),
+            new EnvVar("AWS_SECRET_KEY", null, new EnvVarSourceBuilder().withNewSecretKeyRef("aws-secret-key", "bulk-processor-secret", false).build())
+        );
+    }
+
+    // Helper method to create resource requirements
+    private ResourceRequirements createResourceRequirements(PhEeImporterRdbms resource) {
+        return new ResourceRequirementsBuilder()
+            .withLimits(new HashMap<String, Quantity>() {{
+                put("cpu", new Quantity(resource.getSpec().getResources().getLimits().getCpu()));
+                put("memory", new Quantity(resource.getSpec().getResources().getLimits().getMemory()));
+            }})
+            .withRequests(new HashMap<String, Quantity>() {{
+                put("cpu", new Quantity(resource.getSpec().getResources().getRequests().getCpu()));
+                put("memory", new Quantity(resource.getSpec().getResources().getRequests().getMemory()));
+            }})
+            .build();
+    }
+
+
+
     private void reconcileSecret(PhEeImporterRdbms resource) {
+        log.info("Reconciling Secret for resource: {}", resource.getMetadata().getName());
         Secret secret = createSecret(resource);
+        log.info("Created Secret spec: {}", secret);
+
         Resource<Secret> secretResource = kubernetesClient.secrets()
                 .inNamespace(resource.getMetadata().getNamespace())
                 .withName("importer-rdbms-secret");
@@ -85,23 +195,24 @@ public class PhEeImporterRdbmsController implements Reconciler<PhEeImporterRdbms
         }
     }
 
-    private void reconcileConfigMap(PhEeImporterRdbms resource) {
-        ConfigMap configMap = createConfigMap(resource);
-        Resource<ConfigMap> configMapResource = kubernetesClient.configMaps()
-                .inNamespace(resource.getMetadata().getNamespace())
-                .withName("ph-ee-config");
-
-        if (configMapResource.get() == null) {
-            configMapResource.create(configMap);
-            log.info("Created new ConfigMap: {}", "ph-ee-config");
-        } else {
-            configMapResource.patch(configMap);
-            log.info("Updated existing ConfigMap: {}", "ph-ee-config");
-        }
+    private Secret createSecret(PhEeImporterRdbms resource) {
+        log.info("Creating Secret spec for resource: {}", resource.getMetadata().getName());
+        return new SecretBuilder()
+                .withNewMetadata()
+                    .withName("importer-rdbms-secret")
+                    .withNamespace(resource.getMetadata().getNamespace())
+                    .withOwnerReferences(createOwnerReferences(resource))
+                .endMetadata()
+                .addToData("database-password", Base64.getEncoder().encodeToString(resource.getSpec().getDatasource().getPassword().getBytes()))
+                .build();
     }
 
+
     private void reconcileServiceAccount(PhEeImporterRdbms resource) {
+        log.info("Reconciling ServiceAccount for resource: {}", resource.getMetadata().getName());
         ServiceAccount serviceAccount = createServiceAccount(resource);
+        log.info("Created ServiceAccount spec: {}", serviceAccount);
+
         Resource<ServiceAccount> serviceAccountResource = kubernetesClient.serviceAccounts()
                 .inNamespace(resource.getMetadata().getNamespace())
                 .withName("ph-ee-importer-rdbms");
@@ -115,30 +226,24 @@ public class PhEeImporterRdbmsController implements Reconciler<PhEeImporterRdbms
         }
     }
 
-    private void reconcileClusterRole(PhEeImporterRdbms resource) {
-        ClusterRole clusterRole = createClusterRole(resource);
-        Resource<ClusterRole> clusterRoleResource = kubernetesClient.rbac().clusterRoles()
-                .withName("ph-ee-importer-rdbms-c-role");
-
-        if (clusterRoleResource.get() == null) {
-            clusterRoleResource.create(clusterRole);
-            log.info("Created new ClusterRole: {}", "ph-ee-importer-rdbms-c-role");
-        }
+    private ServiceAccount createServiceAccount(PhEeImporterRdbms resource) {
+        log.info("Creating ServiceAccount spec for resource: {}", resource.getMetadata().getName());
+        return new ServiceAccountBuilder()
+                .withNewMetadata()
+                    .withName("ph-ee-importer-rdbms")
+                    .withNamespace(resource.getMetadata().getNamespace())
+                    .withOwnerReferences(createOwnerReferences(resource))
+                .endMetadata()
+                .build();
     }
 
-    private void reconcileClusterRoleBinding(PhEeImporterRdbms resource) {
-        ClusterRoleBinding clusterRoleBinding = createClusterRoleBinding(resource);
-        Resource<ClusterRoleBinding> clusterRoleBindingResource = kubernetesClient.rbac().clusterRoleBindings()
-                .withName("ph-ee-importer-rdbms-c-role-binding");
 
-        if (clusterRoleBindingResource.get() == null) {
-            clusterRoleBindingResource.create(clusterRoleBinding);
-            log.info("Created new ClusterRoleBinding: {}", "ph-ee-importer-rdbms-c-role-binding");
-        }
-    }
 
     private void reconcileRole(PhEeImporterRdbms resource) {
+        log.info("Reconciling Role for resource: {}", resource.getMetadata().getName());
         Role role = createRole(resource);
+        log.info("Created Role spec: {}", role);
+
         Resource<Role> roleResource = kubernetesClient.rbac().roles()
                 .inNamespace(resource.getMetadata().getNamespace())
                 .withName("ph-ee-importer-rdbms-role");
@@ -146,178 +251,55 @@ public class PhEeImporterRdbmsController implements Reconciler<PhEeImporterRdbms
         if (roleResource.get() == null) {
             roleResource.create(role);
             log.info("Created new Role: {}", "ph-ee-importer-rdbms-role");
+        } else {
+            roleResource.patch(role);
+            log.info("Updated existing Role: {}", "ph-ee-importer-rdbms-role");
         }
-    }
-
-    private void reconcileRoleBinding(PhEeImporterRdbms resource) {
-        RoleBinding roleBinding = createRoleBinding(resource);
-        Resource<RoleBinding> roleBindingResource = kubernetesClient.rbac().roleBindings()
-                .inNamespace(resource.getMetadata().getNamespace())
-                .withName("ph-ee-importer-rdbms-role-binding");
-
-        if (roleBindingResource.get() == null) {
-            roleBindingResource.create(roleBinding);
-            log.info("Created new RoleBinding: {}", "ph-ee-importer-rdbms-role-binding");
-        }
-    }
-
-
-    //Below are all the resource creation methods
-
-     private Deployment createDeployment(PhEeImporterRdbms resource) {
-        Deployment deployment = new Deployment();
-        deployment.setMetadata(resource.getMetadata());
-
-        DeploymentSpec deploymentSpec = new DeploymentSpec();
-        deploymentSpec.setReplicas(resource.getSpec().getReplicas());
-
-        PodTemplateSpec podTemplateSpec = new PodTemplateSpec();
-        PodSpec podSpec = new PodSpec();
-
-        // Set up the container specifications based on the custom resource spec
-        Container container = new Container();
-        container.setName(resource.getMetadata().getName());
-        container.setImage(resource.getSpec().getImage());
-
-        // Environment variables
-        List<EnvVar> envVars = new ArrayList<>();
-        envVars.add(new EnvVar("SPRING_PROFILES_ACTIVE", resource.getSpec().getSpringProfilesActive(), null));
-        envVars.add(new EnvVar("DATASOURCE_CORE_USERNAME", resource.getSpec().getDatasource().getUsername(), null));
-        envVars.add(new EnvVar("DATASOURCE_CORE_PASSWORD", null, new EnvVarSourceBuilder().withNewSecretKeyRef("database-password", "importer-rdbms-secret", false).build()));
-        envVars.add(new EnvVar("DATASOURCE_CORE_HOST", resource.getSpec().getDatasource().getHost(), null));
-        envVars.add(new EnvVar("DATASOURCE_CORE_PORT", String.valueOf(resource.getSpec().getDatasource().getPort()), null));
-        envVars.add(new EnvVar("DATASOURCE_CORE_SCHEMA", resource.getSpec().getDatasource().getSchema(), null));
-        envVars.add(new EnvVar("LOGGING_LEVEL_ROOT", resource.getSpec().getLogging().getLevelRoot(), null));
-        envVars.add(new EnvVar("LOGGING_PATTERN_CONSOLE", resource.getSpec().getLogging().getPatternConsole(), null));
-        envVars.add(new EnvVar("JAVA_TOOL_OPTIONS", resource.getSpec().getJavaToolOptions(), null));
-        envVars.add(new EnvVar("APPLICATION_BUCKET_NAME", resource.getSpec().getBucketName(), null));
-        // Add AWS secrets
-        envVars.add(new EnvVar("CLOUD_AWS_REGION_STATIC", null, new EnvVarSourceBuilder().withNewSecretKeyRef("aws-region", "bulk-processor-secret", false).build()));
-        envVars.add(new EnvVar("AWS_ACCESS_KEY", null, new EnvVarSourceBuilder().withNewSecretKeyRef("aws-access-key", "bulk-processor-secret", false).build()));
-        envVars.add(new EnvVar("AWS_SECRET_KEY", null, new EnvVarSourceBuilder().withNewSecretKeyRef("aws-secret-key", "bulk-processor-secret", false).build()));
-
-        container.setEnv(envVars);
-
-        // Resource limits and requests
-        ResourceRequirements resourceRequirements = new ResourceRequirements();
-        Map<String, Quantity> limits = new HashMap<>();
-        limits.put("cpu", new Quantity(resource.getSpec().getResources().getLimits().getCpu()));
-        limits.put("memory", new Quantity(resource.getSpec().getResources().getLimits().getMemory()));
-        resourceRequirements.setLimits(limits);
-
-        Map<String, Quantity> requests = new HashMap<>();
-        requests.put("cpu", new Quantity(resource.getSpec().getResources().getRequests().getCpu()));
-        requests.put("memory", new Quantity(resource.getSpec().getResources().getRequests().getMemory()));
-        resourceRequirements.setRequests(requests);
-
-        container.setResources(resourceRequirements);
-
-        // Volume mounts
-        VolumeMount volumeMount = new VolumeMount();
-        volumeMount.setName("ph-ee-config");
-        volumeMount.setMountPath("/config");
-        container.setVolumeMounts(Collections.singletonList(volumeMount));
-
-        podSpec.setContainers(Collections.singletonList(container));
-
-        // Volumes
-        Volume volume = new Volume();
-        volume.setName("ph-ee-config");
-        ConfigMapVolumeSource configMapVolumeSource = new ConfigMapVolumeSource();
-        configMapVolumeSource.setName("ph-ee-config");
-        volume.setConfigMap(configMapVolumeSource);
-        podSpec.setVolumes(Collections.singletonList(volume));
-
-        podTemplateSpec.setSpec(podSpec);
-        deploymentSpec.setTemplate(podTemplateSpec);
-        deployment.setSpec(deploymentSpec);
-
-        return deployment;
-    }
-
-    private Secret createSecret(PhEeImporterRdbms resource) {
-        return new SecretBuilder()
-                .withNewMetadata()
-                    .withName("importer-rdbms-secret")
-                    .withNamespace(resource.getMetadata().getNamespace())
-                .endMetadata()
-                .addToData("database-password", Base64.getEncoder().encodeToString(resource.getSpec().getDatasource().getPassword().getBytes()))
-                .build();
-    }
-
-    private ConfigMap createConfigMap(PhEeImporterRdbms resource) {
-        return new ConfigMapBuilder()
-                .withNewMetadata()
-                    .withName("ph-ee-config")
-                    .withNamespace(resource.getMetadata().getNamespace())
-                .endMetadata()
-                .addToData("config-file-name", "config-file-content") // Add actual config data
-                .build();
-    }
-
-    private ServiceAccount createServiceAccount(PhEeImporterRdbms resource) {
-        return new ServiceAccountBuilder()
-                .withNewMetadata()
-                    .withName("ph-ee-importer-rdbms")
-                    .withNamespace(resource.getMetadata().getNamespace())
-                    .addToLabels("app", "ph-ee-importer-rdbms")
-                    .addToLabels("chart", resource.getMetadata().getLabels().get("chart"))
-                    .addToLabels("heritage", resource.getMetadata().getLabels().get("heritage"))
-                    .addToLabels("release", resource.getMetadata().getLabels().get("release"))
-                .endMetadata()
-                .build();
-    }
-
-    private ClusterRole createClusterRole(PhEeImporterRdbms resource) {
-        return new ClusterRoleBuilder()
-                .withNewMetadata()
-                    .withName("ph-ee-importer-rdbms-c-role")
-                .endMetadata()
-                .addNewRule()
-                    .withApiGroups("")
-                    .withResources("secrets")
-                    .withVerbs("get", "watch", "list")
-                .endRule()
-                .build();
-    }
-
-    private ClusterRoleBinding createClusterRoleBinding(PhEeImporterRdbms resource) {
-        return new ClusterRoleBindingBuilder()
-                .withNewMetadata()
-                    .withName("ph-ee-importer-rdbms-c-role-binding")
-                .endMetadata()
-                .withSubjects(new SubjectBuilder()
-                        .withKind("ServiceAccount")
-                        .withName("ph-ee-importer-rdbms")
-                        .withNamespace(resource.getMetadata().getNamespace())
-                        .build())
-                .withRoleRef(new RoleRefBuilder()
-                        .withKind("ClusterRole")
-                        .withName("ph-ee-importer-rdbms-c-role")
-                        .withApiGroup("rbac.authorization.k8s.io")
-                        .build())
-                .build();
     }
 
     private Role createRole(PhEeImporterRdbms resource) {
+        log.info("Creating Role spec for resource: {}", resource.getMetadata().getName());
         return new RoleBuilder()
                 .withNewMetadata()
                     .withName("ph-ee-importer-rdbms-role")
                     .withNamespace(resource.getMetadata().getNamespace())
+                    .withOwnerReferences(createOwnerReferences(resource))
                 .endMetadata()
                 .addNewRule()
                     .withApiGroups("")
-                    .withResources("pods", "configmaps")
-                    .withVerbs("get", "create", "update")
+                    .withResources("pods", "services", "endpoints", "persistentvolumeclaims")
+                    .withVerbs("get", "list", "watch", "create", "update", "patch", "delete")
                 .endRule()
                 .build();
     }
 
+
+
+    private void reconcileRoleBinding(PhEeImporterRdbms resource) {
+        log.info("Reconciling RoleBinding for resource: {}", resource.getMetadata().getName());
+        RoleBinding roleBinding = createRoleBinding(resource);
+        log.info("Created RoleBinding spec: {}", roleBinding);
+
+        Resource<RoleBinding> roleBindingResource = kubernetesClient.rbac().roleBindings()
+                .inNamespace(resource.getMetadata().getNamespace())
+                .withName("ph-ee-importer-rdbms-rolebinding");
+
+        if (roleBindingResource.get() == null) {
+            roleBindingResource.create(roleBinding);
+            log.info("Created new RoleBinding: {}", "ph-ee-importer-rdbms-rolebinding");
+        } else {
+            roleBindingResource.patch(roleBinding);
+            log.info("Updated existing RoleBinding: {}", "ph-ee-importer-rdbms-rolebinding");
+        }
+    }
+
     private RoleBinding createRoleBinding(PhEeImporterRdbms resource) {
+        log.info("Creating RoleBinding spec for resource: {}", resource.getMetadata().getName());
         return new RoleBindingBuilder()
                 .withNewMetadata()
-                    .withName("ph-ee-importer-rdbms-role-binding")
+                    .withName("ph-ee-importer-rdbms-rolebinding")
                     .withNamespace(resource.getMetadata().getNamespace())
+                    .withOwnerReferences(createOwnerReferences(resource))
                 .endMetadata()
                 .withSubjects(new SubjectBuilder()
                         .withKind("ServiceAccount")
@@ -325,10 +307,103 @@ public class PhEeImporterRdbmsController implements Reconciler<PhEeImporterRdbms
                         .withNamespace(resource.getMetadata().getNamespace())
                         .build())
                 .withRoleRef(new RoleRefBuilder()
+                        .withApiGroup("rbac.authorization.k8s.io")
                         .withKind("Role")
                         .withName("ph-ee-importer-rdbms-role")
-                        .withApiGroup("rbac.authorization.k8s.io")
                         .build())
                 .build();
+    }
+
+
+
+    private void reconcileClusterRole(PhEeImporterRdbms resource) {
+        log.info("Reconciling ClusterRole for resource: {}", resource.getMetadata().getName());
+        ClusterRole clusterRole = createClusterRole(resource);
+        log.info("Created ClusterRole spec: {}", clusterRole);
+
+        Resource<ClusterRole> clusterRoleResource = kubernetesClient.rbac().clusterRoles()
+                .withName("ph-ee-importer-rdbms-clusterrole");
+
+        if (clusterRoleResource.get() == null) {
+            clusterRoleResource.create(clusterRole);
+            log.info("Created new ClusterRole: {}", "ph-ee-importer-rdbms-clusterrole");
+        } else {
+            clusterRoleResource.patch(clusterRole);
+            log.info("Updated existing ClusterRole: {}", "ph-ee-importer-rdbms-clusterrole");
+        }
+    }
+
+    private ClusterRole createClusterRole(PhEeImporterRdbms resource) {
+        log.info("Creating ClusterRole spec for resource: {}", resource.getMetadata().getName());
+        return new ClusterRoleBuilder()
+                .withNewMetadata()
+                    .withName("ph-ee-importer-rdbms-clusterrole")
+                    .withOwnerReferences(createOwnerReferences(resource))
+                .endMetadata()
+                .addNewRule()
+                    .withApiGroups("")
+                    .withResources("pods", "services", "endpoints", "persistentvolumeclaims")
+                    .withVerbs("get", "list", "watch", "create", "update", "patch", "delete")
+                .endRule()
+                .addNewRule()
+                    .withApiGroups("apps")
+                    .withResources("deployments")
+                    .withVerbs("get", "list", "watch", "create", "update", "patch", "delete")
+                .endRule()
+                .build();
+    }
+
+
+
+    private void reconcileClusterRoleBinding(PhEeImporterRdbms resource) {
+        log.info("Reconciling ClusterRoleBinding for resource: {}", resource.getMetadata().getName());
+        ClusterRoleBinding clusterRoleBinding = createClusterRoleBinding(resource);
+        log.info("Created ClusterRoleBinding spec: {}", clusterRoleBinding);
+
+        Resource<ClusterRoleBinding> clusterRoleBindingResource = kubernetesClient.rbac().clusterRoleBindings()
+                .withName("ph-ee-importer-rdbms-clusterrolebinding");
+
+        if (clusterRoleBindingResource.get() == null) {
+            clusterRoleBindingResource.create(clusterRoleBinding);
+            log.info("Created new ClusterRoleBinding: {}", "ph-ee-importer-rdbms-clusterrolebinding");
+        } else {
+            clusterRoleBindingResource.patch(clusterRoleBinding);
+            log.info("Updated existing ClusterRoleBinding: {}", "ph-ee-importer-rdbms-clusterrolebinding");
+        }
+    }
+
+    private ClusterRoleBinding createClusterRoleBinding(PhEeImporterRdbms resource) {
+        log.info("Creating ClusterRoleBinding spec for resource: {}", resource.getMetadata().getName());
+        return new ClusterRoleBindingBuilder()
+                .withNewMetadata()
+                    .withName("ph-ee-importer-rdbms-clusterrolebinding")
+                    .withOwnerReferences(createOwnerReferences(resource))
+                .endMetadata()
+                .withSubjects(new SubjectBuilder()
+                        .withKind("ServiceAccount")
+                        .withName("ph-ee-importer-rdbms")
+                        .withNamespace(resource.getMetadata().getNamespace())
+                        .build())
+                .withRoleRef(new RoleRefBuilder()
+                        .withApiGroup("rbac.authorization.k8s.io")
+                        .withKind("ClusterRole")
+                        .withName("ph-ee-importer-rdbms-clusterrole")
+                        .build())
+                .build();
+    }
+
+
+
+    private List<OwnerReference> createOwnerReferences(PhEeImporterRdbms resource) {
+        return Collections.singletonList(
+            new OwnerReferenceBuilder()
+                .withApiVersion(resource.getApiVersion())
+                .withKind(resource.getKind())
+                .withName(resource.getMetadata().getName())
+                .withUid(resource.getMetadata().getUid())
+                .withController(true)
+                .withBlockOwnerDeletion(true)
+                .build()
+        );
     }
 }
