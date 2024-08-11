@@ -24,10 +24,14 @@ PHEE-operator/
 │                   │   └── PhEeImporterRdbmsStatus.java
 │                   ├── utils/
 |                   │   ├── LoggingUtil.java 
+|                   │   ├── ProbeUtils.java 
+|                   │   ├── ResourceDeletionUtil.java 
 |                   │   └── StatusUpdateUtil.java
 │                   ├── OperatorMain.java
 |                   └── PhEeImporterRdbmsController.java
-└── pom.xml 
+├── ARCHITECTURE.md
+├── pom.xml
+└── README.md
 ```
 
 ## Table of Contents
@@ -128,6 +132,18 @@ The PHEE Operator comprises several key components:
 
 - **Purpose**: Provides utility methods for logging within the operator.
 
+#### ProbeUtils.java
+
+- **File**: `src/main/java/com/example/utils/ProbeUtils.java`
+
+- **Purpose**: Provides helper methods for adding probes to the deployment.
+
+#### ResourceDeletionUtil.java
+
+- **File**: `src/main/java/com/example/utils/ResourceDeletionUtil.java`
+
+- **Purpose**: Provides helper methods to delete the deployment and its RBACs according to toggle enable/disable in Custom Resource.
+
 #### StatusUpdateUtil.java
 
 - **File**: `src/main/java/com/example/utils/StatusUpdateUtil.java`
@@ -147,6 +163,8 @@ The deployment of the PHEE Operator involves several steps:
 - **CRD Deployment**: Apply the CRD to the cluster.
 - **Operator Deployment**: Deploy the operator using a Deployment resource. 
 - **CR Deployment**: Create custom resources as needed.
+
+Follow steps in [README.md](./README.md) 
 
 Deployment files:
 

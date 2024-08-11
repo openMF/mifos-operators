@@ -23,6 +23,8 @@ import org.slf4j.LoggerFactory;
 import com.example.customresource.PhEeImporterRdbms;
 import com.example.utils.LoggingUtil;
 import com.example.utils.StatusUpdateUtil;
+import com.example.utils.ProbeUtils; 
+import com.example.utils.ResourceDeletionUtil;
 
 // utils
 import java.util.*;
@@ -41,26 +43,52 @@ public class PhEeImporterRdbmsController implements Reconciler<PhEeImporterRdbms
 
     @Override
     public UpdateControl<PhEeImporterRdbms> reconcile(PhEeImporterRdbms resource, Context<PhEeImporterRdbms> context) {
+        String resourceName = resource.getMetadata().getName();
+
+        // Check if the deployment is disabled
+        if (resource.getSpec().getEnabled() == null || !resource.getSpec().getEnabled()) {
+            log.info("Deployment {} is disabled, deleting all associated resources.", resourceName);
+            ResourceDeletionUtil.deleteResources(kubernetesClient, resource);
+            return StatusUpdateUtil.updateDisabledStatus(kubernetesClient, resource);
+        }
+
+        // Deployment is enabled, proceed with individual resource checks
         LoggingUtil.logResourceDetails(resource);
 
-        try { 
+        try {
+            // Check and reconcile RBACs
+            if (resource.getSpec().getrbacEnabled() == null || !resource.getSpec().getrbacEnabled()) {
+                log.info("RBACs for resource {} are disabled, deleting associated RBAC resources.", resourceName);
+                ResourceDeletionUtil.deleteRbacResources(kubernetesClient, resource);
+            } else {
+                reconcileServiceAccount(resource);
+                reconcileClusterRole(resource);
+                reconcileClusterRoleBinding(resource);
+                reconcileRole(resource);
+                reconcileRoleBinding(resource);
+            }
 
-            reconcileServiceAccount(resource);
-            reconcileSecret(resource); 
-            reconcileClusterRole(resource);
-            reconcileClusterRoleBinding(resource);
-            reconcileRole(resource);
-            reconcileRoleBinding(resource); 
+            // Check and reconcile Secrets
+            if (resource.getSpec().getsecretEnabled() == null || !resource.getSpec().getsecretEnabled()) {
+                log.info("Secrets for resource {} are disabled, deleting associated Secret resources.", resourceName);
+                ResourceDeletionUtil.deleteSecretResources(kubernetesClient, resource);
+            } else {
+                reconcileSecret(resource);
+            } 
+
+            // Always reconcile the Deployment itself
             reconcileDeployment(resource);
 
+            // Return success status update
             return StatusUpdateUtil.updateStatus(kubernetesClient, resource, resource.getSpec().getReplicas(), resource.getSpec().getImage(), true, "");
 
         } catch (Exception e) {
-            LoggingUtil.logError("Error during reconciliation", e);
+            // Log the error and return an error status update
+            LoggingUtil.logError("Error during reconciliation for resource " + resourceName, e);
             return StatusUpdateUtil.updateErrorStatus(kubernetesClient, resource, resource.getSpec().getImage(), e);
         }
-    }
-
+    } 
+    
     private void reconcileDeployment(PhEeImporterRdbms resource) {
         log.info("Reconciling Deployment for resource: {}", resource.getMetadata().getName());
         Deployment deployment = createDeployment(resource);
@@ -97,6 +125,8 @@ public class PhEeImporterRdbmsController implements Reconciler<PhEeImporterRdbms
                 .withName("ph-ee-config")
                 .withMountPath("/config")
                 .build())
+            .withLivenessProbe(ProbeUtils.createProbe(resource, "liveness"))
+            .withReadinessProbe(ProbeUtils.createProbe(resource, "readiness"))
             .build();
 
         // Create PodSpec with the defined container and volumes
@@ -174,227 +204,228 @@ public class PhEeImporterRdbmsController implements Reconciler<PhEeImporterRdbms
             }})
             .build();
     }
+ 
 
+// Reconcile Secret
+private void reconcileSecret(PhEeImporterRdbms resource) {
+    String secretName = resource.getMetadata().getName() + "-secret";
+    log.info("Reconciling Secret for resource: {}", resource.getMetadata().getName());
+    Secret secret = createSecret(resource, secretName);
+    log.info("Created Secret spec: {}", secret);
 
+    Resource<Secret> secretResource = kubernetesClient.secrets()
+            .inNamespace(resource.getMetadata().getNamespace())
+            .withName(secretName);
 
-    private void reconcileSecret(PhEeImporterRdbms resource) {
-        log.info("Reconciling Secret for resource: {}", resource.getMetadata().getName());
-        Secret secret = createSecret(resource);
-        log.info("Created Secret spec: {}", secret);
-
-        Resource<Secret> secretResource = kubernetesClient.secrets()
-                .inNamespace(resource.getMetadata().getNamespace())
-                .withName("importer-rdbms-secret");
-
-        if (secretResource.get() == null) {
-            secretResource.create(secret);
-            log.info("Created new Secret: {}", "importer-rdbms-secret");
-        } else {
-            secretResource.patch(secret);
-            log.info("Updated existing Secret: {}", "importer-rdbms-secret");
-        }
+    if (secretResource.get() == null) {
+        secretResource.create(secret);
+        log.info("Created new Secret: {}", secretName);
+    } else {
+        secretResource.patch(secret);
+        log.info("Updated existing Secret: {}", secretName);
     }
+}
 
-    private Secret createSecret(PhEeImporterRdbms resource) {
-        log.info("Creating Secret spec for resource: {}", resource.getMetadata().getName());
-        return new SecretBuilder()
-                .withNewMetadata()
-                    .withName("importer-rdbms-secret")
+private Secret createSecret(PhEeImporterRdbms resource, String secretName) {
+    log.info("Creating Secret spec for resource: {}", resource.getMetadata().getName());
+    return new SecretBuilder()
+            .withNewMetadata()
+                .withName(secretName)
+                .withNamespace(resource.getMetadata().getNamespace())
+                .withOwnerReferences(createOwnerReferences(resource))
+            .endMetadata()
+            .addToData("database-password", Base64.getEncoder().encodeToString(resource.getSpec().getDatasource().getPassword().getBytes()))
+            .build();
+}
+
+// Reconcile ServiceAccount
+private void reconcileServiceAccount(PhEeImporterRdbms resource) {
+    String saName = resource.getMetadata().getName() + "-sa";
+    log.info("Reconciling ServiceAccount for resource: {}", resource.getMetadata().getName());
+    ServiceAccount serviceAccount = createServiceAccount(resource, saName);
+    log.info("Created ServiceAccount spec: {}", serviceAccount);
+
+    Resource<ServiceAccount> serviceAccountResource = kubernetesClient.serviceAccounts()
+            .inNamespace(resource.getMetadata().getNamespace())
+            .withName(saName);
+
+    if (serviceAccountResource.get() == null) {
+        serviceAccountResource.create(serviceAccount);
+        log.info("Created new ServiceAccount: {}", saName);
+    } else {
+        serviceAccountResource.patch(serviceAccount);
+        log.info("Updated existing ServiceAccount: {}", saName);
+    }
+}
+
+private ServiceAccount createServiceAccount(PhEeImporterRdbms resource, String saName) {
+    log.info("Creating ServiceAccount spec for resource: {}", resource.getMetadata().getName());
+    return new ServiceAccountBuilder()
+            .withNewMetadata()
+                .withName(saName)
+                .withNamespace(resource.getMetadata().getNamespace())
+                .withOwnerReferences(createOwnerReferences(resource))
+            .endMetadata()
+            .build();
+}
+
+// Reconcile Role
+private void reconcileRole(PhEeImporterRdbms resource) {
+    String roleName = resource.getMetadata().getName() + "-role";
+    log.info("Reconciling Role for resource: {}", resource.getMetadata().getName());
+    Role role = createRole(resource, roleName);
+    log.info("Created Role spec: {}", role);
+
+    Resource<Role> roleResource = kubernetesClient.rbac().roles()
+            .inNamespace(resource.getMetadata().getNamespace())
+            .withName(roleName);
+
+    if (roleResource.get() == null) {
+        roleResource.create(role);
+        log.info("Created new Role: {}", roleName);
+    } else {
+        roleResource.patch(role);
+        log.info("Updated existing Role: {}", roleName);
+    }
+}
+
+private Role createRole(PhEeImporterRdbms resource, String roleName) {
+    log.info("Creating Role spec for resource: {}", resource.getMetadata().getName());
+    return new RoleBuilder()
+            .withNewMetadata()
+                .withName(roleName)
+                .withNamespace(resource.getMetadata().getNamespace())
+                .withOwnerReferences(createOwnerReferences(resource))
+            .endMetadata()
+            .addNewRule()
+                .withApiGroups("")
+                .withResources("pods", "services", "endpoints", "persistentvolumeclaims")
+                .withVerbs("get", "list", "watch", "create", "update", "patch", "delete")
+            .endRule()
+            .build();
+}
+
+// Reconcile RoleBinding
+private void reconcileRoleBinding(PhEeImporterRdbms resource) {
+    String roleBindingName = resource.getMetadata().getName() + "-rolebinding";
+    log.info("Reconciling RoleBinding for resource: {}", resource.getMetadata().getName());
+    RoleBinding roleBinding = createRoleBinding(resource, roleBindingName);
+    log.info("Created RoleBinding spec: {}", roleBinding);
+
+    Resource<RoleBinding> roleBindingResource = kubernetesClient.rbac().roleBindings()
+            .inNamespace(resource.getMetadata().getNamespace())
+            .withName(roleBindingName);
+
+    if (roleBindingResource.get() == null) {
+        roleBindingResource.create(roleBinding);
+        log.info("Created new RoleBinding: {}", roleBindingName);
+    } else {
+        roleBindingResource.patch(roleBinding);
+        log.info("Updated existing RoleBinding: {}", roleBindingName);
+    }
+}
+
+private RoleBinding createRoleBinding(PhEeImporterRdbms resource, String roleBindingName) {
+    log.info("Creating RoleBinding spec for resource: {}", resource.getMetadata().getName());
+    return new RoleBindingBuilder()
+            .withNewMetadata()
+                .withName(roleBindingName)
+                .withNamespace(resource.getMetadata().getNamespace())
+                .withOwnerReferences(createOwnerReferences(resource))
+            .endMetadata()
+            .withSubjects(new SubjectBuilder()
+                    .withKind("ServiceAccount")
+                    .withName(resource.getMetadata().getName() + "-sa")
                     .withNamespace(resource.getMetadata().getNamespace())
-                    .withOwnerReferences(createOwnerReferences(resource))
-                .endMetadata()
-                .addToData("database-password", Base64.getEncoder().encodeToString(resource.getSpec().getDatasource().getPassword().getBytes()))
-                .build();
+                    .build())
+            .withRoleRef(new RoleRefBuilder()
+                    .withApiGroup("rbac.authorization.k8s.io")
+                    .withKind("Role")
+                    .withName(resource.getMetadata().getName() + "-role")
+                    .build())
+            .build();
+}
+
+// Reconcile ClusterRole
+private void reconcileClusterRole(PhEeImporterRdbms resource) {
+    String clusterRoleName = resource.getMetadata().getName() + "-clusterrole";
+    log.info("Reconciling ClusterRole for resource: {}", resource.getMetadata().getName());
+    ClusterRole clusterRole = createClusterRole(resource, clusterRoleName);
+    log.info("Created ClusterRole spec: {}", clusterRole);
+
+    Resource<ClusterRole> clusterRoleResource = kubernetesClient.rbac().clusterRoles()
+            .withName(clusterRoleName);
+
+    if (clusterRoleResource.get() == null) {
+        clusterRoleResource.create(clusterRole);
+        log.info("Created new ClusterRole: {}", clusterRoleName);
+    } else {
+        clusterRoleResource.patch(clusterRole);
+        log.info("Updated existing ClusterRole: {}", clusterRoleName);
     }
+}
 
+private ClusterRole createClusterRole(PhEeImporterRdbms resource, String clusterRoleName) {
+    log.info("Creating ClusterRole spec for resource: {}", resource.getMetadata().getName());
+    return new ClusterRoleBuilder()
+            .withNewMetadata()
+                .withName(clusterRoleName)
+                .withOwnerReferences(createOwnerReferences(resource))
+            .endMetadata()
+            .addNewRule()
+                .withApiGroups("")
+                .withResources("pods", "services", "endpoints", "persistentvolumeclaims")
+                .withVerbs("get", "list", "watch", "create", "update", "patch", "delete")
+            .endRule()
+            .addNewRule()
+                .withApiGroups("apps")
+                .withResources("deployments")
+                .withVerbs("get", "list", "watch", "create", "update", "patch", "delete")
+            .endRule()
+            .build();
+}
 
-    private void reconcileServiceAccount(PhEeImporterRdbms resource) {
-        log.info("Reconciling ServiceAccount for resource: {}", resource.getMetadata().getName());
-        ServiceAccount serviceAccount = createServiceAccount(resource);
-        log.info("Created ServiceAccount spec: {}", serviceAccount);
+// Reconcile ClusterRoleBinding
+private void reconcileClusterRoleBinding(PhEeImporterRdbms resource) {
+    String clusterRoleBindingName = resource.getMetadata().getName() + "-clusterrolebinding";
+    log.info("Reconciling ClusterRoleBinding for resource: {}", resource.getMetadata().getName());
+    ClusterRoleBinding clusterRoleBinding = createClusterRoleBinding(resource, clusterRoleBindingName);
+    log.info("Created ClusterRoleBinding spec: {}", clusterRoleBinding);
 
-        Resource<ServiceAccount> serviceAccountResource = kubernetesClient.serviceAccounts()
-                .inNamespace(resource.getMetadata().getNamespace())
-                .withName("ph-ee-importer-rdbms");
+    Resource<ClusterRoleBinding> clusterRoleBindingResource = kubernetesClient.rbac().clusterRoleBindings()
+            .withName(clusterRoleBindingName);
 
-        if (serviceAccountResource.get() == null) {
-            serviceAccountResource.create(serviceAccount);
-            log.info("Created new ServiceAccount: {}", "ph-ee-importer-rdbms");
-        } else {
-            serviceAccountResource.patch(serviceAccount);
-            log.info("Updated existing ServiceAccount: {}", "ph-ee-importer-rdbms");
-        }
+    if (clusterRoleBindingResource.get() == null) {
+        clusterRoleBindingResource.create(clusterRoleBinding);
+        log.info("Created new ClusterRoleBinding: {}", clusterRoleBindingName);
+    } else {
+        clusterRoleBindingResource.patch(clusterRoleBinding);
+        log.info("Updated existing ClusterRoleBinding: {}", clusterRoleBindingName);
     }
+}
 
-    private ServiceAccount createServiceAccount(PhEeImporterRdbms resource) {
-        log.info("Creating ServiceAccount spec for resource: {}", resource.getMetadata().getName());
-        return new ServiceAccountBuilder()
-                .withNewMetadata()
-                    .withName("ph-ee-importer-rdbms")
+private ClusterRoleBinding createClusterRoleBinding(PhEeImporterRdbms resource, String clusterRoleBindingName) {
+    log.info("Creating ClusterRoleBinding spec for resource: {}", resource.getMetadata().getName());
+    return new ClusterRoleBindingBuilder()
+            .withNewMetadata()
+                .withName(clusterRoleBindingName)
+                .withOwnerReferences(createOwnerReferences(resource))
+            .endMetadata()
+            .withSubjects(new SubjectBuilder()
+                    .withKind("ServiceAccount")
+                    .withName(resource.getMetadata().getName() + "-sa")
                     .withNamespace(resource.getMetadata().getNamespace())
-                    .withOwnerReferences(createOwnerReferences(resource))
-                .endMetadata()
-                .build();
-    }
-
-
-
-    private void reconcileRole(PhEeImporterRdbms resource) {
-        log.info("Reconciling Role for resource: {}", resource.getMetadata().getName());
-        Role role = createRole(resource);
-        log.info("Created Role spec: {}", role);
-
-        Resource<Role> roleResource = kubernetesClient.rbac().roles()
-                .inNamespace(resource.getMetadata().getNamespace())
-                .withName("ph-ee-importer-rdbms-role");
-
-        if (roleResource.get() == null) {
-            roleResource.create(role);
-            log.info("Created new Role: {}", "ph-ee-importer-rdbms-role");
-        } else {
-            roleResource.patch(role);
-            log.info("Updated existing Role: {}", "ph-ee-importer-rdbms-role");
-        }
-    }
-
-    private Role createRole(PhEeImporterRdbms resource) {
-        log.info("Creating Role spec for resource: {}", resource.getMetadata().getName());
-        return new RoleBuilder()
-                .withNewMetadata()
-                    .withName("ph-ee-importer-rdbms-role")
-                    .withNamespace(resource.getMetadata().getNamespace())
-                    .withOwnerReferences(createOwnerReferences(resource))
-                .endMetadata()
-                .addNewRule()
-                    .withApiGroups("")
-                    .withResources("pods", "services", "endpoints", "persistentvolumeclaims")
-                    .withVerbs("get", "list", "watch", "create", "update", "patch", "delete")
-                .endRule()
-                .build();
-    }
-
-
-
-    private void reconcileRoleBinding(PhEeImporterRdbms resource) {
-        log.info("Reconciling RoleBinding for resource: {}", resource.getMetadata().getName());
-        RoleBinding roleBinding = createRoleBinding(resource);
-        log.info("Created RoleBinding spec: {}", roleBinding);
-
-        Resource<RoleBinding> roleBindingResource = kubernetesClient.rbac().roleBindings()
-                .inNamespace(resource.getMetadata().getNamespace())
-                .withName("ph-ee-importer-rdbms-rolebinding");
-
-        if (roleBindingResource.get() == null) {
-            roleBindingResource.create(roleBinding);
-            log.info("Created new RoleBinding: {}", "ph-ee-importer-rdbms-rolebinding");
-        } else {
-            roleBindingResource.patch(roleBinding);
-            log.info("Updated existing RoleBinding: {}", "ph-ee-importer-rdbms-rolebinding");
-        }
-    }
-
-    private RoleBinding createRoleBinding(PhEeImporterRdbms resource) {
-        log.info("Creating RoleBinding spec for resource: {}", resource.getMetadata().getName());
-        return new RoleBindingBuilder()
-                .withNewMetadata()
-                    .withName("ph-ee-importer-rdbms-rolebinding")
-                    .withNamespace(resource.getMetadata().getNamespace())
-                    .withOwnerReferences(createOwnerReferences(resource))
-                .endMetadata()
-                .withSubjects(new SubjectBuilder()
-                        .withKind("ServiceAccount")
-                        .withName("ph-ee-importer-rdbms")
-                        .withNamespace(resource.getMetadata().getNamespace())
-                        .build())
-                .withRoleRef(new RoleRefBuilder()
-                        .withApiGroup("rbac.authorization.k8s.io")
-                        .withKind("Role")
-                        .withName("ph-ee-importer-rdbms-role")
-                        .build())
-                .build();
-    }
-
-
-
-    private void reconcileClusterRole(PhEeImporterRdbms resource) {
-        log.info("Reconciling ClusterRole for resource: {}", resource.getMetadata().getName());
-        ClusterRole clusterRole = createClusterRole(resource);
-        log.info("Created ClusterRole spec: {}", clusterRole);
-
-        Resource<ClusterRole> clusterRoleResource = kubernetesClient.rbac().clusterRoles()
-                .withName("ph-ee-importer-rdbms-clusterrole");
-
-        if (clusterRoleResource.get() == null) {
-            clusterRoleResource.create(clusterRole);
-            log.info("Created new ClusterRole: {}", "ph-ee-importer-rdbms-clusterrole");
-        } else {
-            clusterRoleResource.patch(clusterRole);
-            log.info("Updated existing ClusterRole: {}", "ph-ee-importer-rdbms-clusterrole");
-        }
-    }
-
-    private ClusterRole createClusterRole(PhEeImporterRdbms resource) {
-        log.info("Creating ClusterRole spec for resource: {}", resource.getMetadata().getName());
-        return new ClusterRoleBuilder()
-                .withNewMetadata()
-                    .withName("ph-ee-importer-rdbms-clusterrole")
-                    .withOwnerReferences(createOwnerReferences(resource))
-                .endMetadata()
-                .addNewRule()
-                    .withApiGroups("")
-                    .withResources("pods", "services", "endpoints", "persistentvolumeclaims")
-                    .withVerbs("get", "list", "watch", "create", "update", "patch", "delete")
-                .endRule()
-                .addNewRule()
-                    .withApiGroups("apps")
-                    .withResources("deployments")
-                    .withVerbs("get", "list", "watch", "create", "update", "patch", "delete")
-                .endRule()
-                .build();
-    }
-
-
-
-    private void reconcileClusterRoleBinding(PhEeImporterRdbms resource) {
-        log.info("Reconciling ClusterRoleBinding for resource: {}", resource.getMetadata().getName());
-        ClusterRoleBinding clusterRoleBinding = createClusterRoleBinding(resource);
-        log.info("Created ClusterRoleBinding spec: {}", clusterRoleBinding);
-
-        Resource<ClusterRoleBinding> clusterRoleBindingResource = kubernetesClient.rbac().clusterRoleBindings()
-                .withName("ph-ee-importer-rdbms-clusterrolebinding");
-
-        if (clusterRoleBindingResource.get() == null) {
-            clusterRoleBindingResource.create(clusterRoleBinding);
-            log.info("Created new ClusterRoleBinding: {}", "ph-ee-importer-rdbms-clusterrolebinding");
-        } else {
-            clusterRoleBindingResource.patch(clusterRoleBinding);
-            log.info("Updated existing ClusterRoleBinding: {}", "ph-ee-importer-rdbms-clusterrolebinding");
-        }
-    }
-
-    private ClusterRoleBinding createClusterRoleBinding(PhEeImporterRdbms resource) {
-        log.info("Creating ClusterRoleBinding spec for resource: {}", resource.getMetadata().getName());
-        return new ClusterRoleBindingBuilder()
-                .withNewMetadata()
-                    .withName("ph-ee-importer-rdbms-clusterrolebinding")
-                    .withOwnerReferences(createOwnerReferences(resource))
-                .endMetadata()
-                .withSubjects(new SubjectBuilder()
-                        .withKind("ServiceAccount")
-                        .withName("ph-ee-importer-rdbms")
-                        .withNamespace(resource.getMetadata().getNamespace())
-                        .build())
-                .withRoleRef(new RoleRefBuilder()
-                        .withApiGroup("rbac.authorization.k8s.io")
-                        .withKind("ClusterRole")
-                        .withName("ph-ee-importer-rdbms-clusterrole")
-                        .build())
-                .build();
-    }
-
-
+                    .build())
+            .withRoleRef(new RoleRefBuilder()
+                    .withApiGroup("rbac.authorization.k8s.io")
+                    .withKind("ClusterRole")
+                    .withName(resource.getMetadata().getName() + "-clusterrole")
+                    .build())
+            .build();
+}
 
     private List<OwnerReference> createOwnerReferences(PhEeImporterRdbms resource) {
+        // clusterRole and clusterRoleBinding can not be deleted using owner reference
         return Collections.singletonList(
             new OwnerReferenceBuilder()
                 .withApiVersion(resource.getApiVersion())

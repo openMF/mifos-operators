@@ -25,6 +25,9 @@ spec:
             spec:
               type: object
               properties:
+                enabled:
+                  type: boolean
+                  default: true
                 replicas:
                   type: integer
                 image:
@@ -72,6 +75,48 @@ spec:
                   type: string
                 bucketName:
                   type: string
+                livenessProbe:
+                  type: object
+                  properties:
+                    path:
+                      type: string
+                    port:
+                      type: integer
+                    initialDelaySeconds:
+                      type: integer
+                    periodSeconds:
+                      type: integer
+                    failureThreshold:
+                      type: integer
+                    timeoutSeconds:
+                      type: integer
+                readinessProbe:
+                  type: object
+                  properties:
+                    path:
+                      type: string
+                    port:
+                      type: integer
+                    initialDelaySeconds:
+                      type: integer
+                    periodSeconds:
+                      type: integer
+                    failureThreshold:
+                      type: integer
+                    timeoutSeconds:
+                      type: integer
+                rbacEnabled:  # Toggle for RBACs
+                  type: boolean
+                  default: false
+                secretEnabled:  # Toggle for Secrets
+                  type: boolean
+                  default: false
+                configMapEnabled:  # Toggle for ConfigMaps
+                  type: boolean
+                  default: false
+                ingressEnabled:  # Toggle for Ingress
+                  type: boolean
+                  default: false
             status:
               type: object
               properties:

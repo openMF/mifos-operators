@@ -89,7 +89,16 @@ rules:
   - clusterrolebindings
   verbs:
   - '*'
-
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - ingresses
+  verbs:
+  - get
+  - list
+  - watch
+  - delete
+  
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
