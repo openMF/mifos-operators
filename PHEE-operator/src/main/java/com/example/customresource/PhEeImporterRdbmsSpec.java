@@ -3,6 +3,7 @@ package com.example.customresource;
 import java.util.Objects;
 
 public class PhEeImporterRdbmsSpec {
+    private Boolean enabled;
     private Integer replicas;
     private String image;
     private String springProfilesActive;
@@ -11,13 +12,23 @@ public class PhEeImporterRdbmsSpec {
     private Logging logging;
     private String javaToolOptions;
     private String bucketName;
+    private Probe livenessProbe;
+    private Probe readinessProbe;
+    private Boolean rbacEnabled;
+    private Boolean secretEnabled;
+    private Boolean configMapEnabled;
+    private Boolean ingressEnabled;
 
     public PhEeImporterRdbmsSpec() {
     }
 
-    public PhEeImporterRdbmsSpec(Integer replicas, String image, String springProfilesActive,
+    public PhEeImporterRdbmsSpec(Boolean enabled, Integer replicas, String image, String springProfilesActive,
                                  Datasource datasource, Resources resources, Logging logging,
-                                 String javaToolOptions, String bucketName) {
+                                 String javaToolOptions, String bucketName,
+                                 Probe livenessProbe, Probe readinessProbe,
+                                 Boolean rbacEnabled, Boolean secretEnabled,
+                                 Boolean configMapEnabled, Boolean ingressEnabled) {
+        this.enabled = enabled;
         this.replicas = replicas;
         this.image = image;
         this.springProfilesActive = springProfilesActive;
@@ -26,6 +37,20 @@ public class PhEeImporterRdbmsSpec {
         this.logging = logging;
         this.javaToolOptions = javaToolOptions;
         this.bucketName = bucketName;
+        this.livenessProbe = livenessProbe;
+        this.readinessProbe = readinessProbe;
+        this.rbacEnabled = rbacEnabled;
+        this.secretEnabled = secretEnabled;
+        this.configMapEnabled = configMapEnabled;
+        this.ingressEnabled = ingressEnabled;
+    }
+
+    public Boolean getEnabled() {
+        return enabled;
+    }
+
+    public void setEnabled(Boolean enabled) {
+        this.enabled = enabled;
     }
 
     public Integer getReplicas() {
@@ -92,9 +117,58 @@ public class PhEeImporterRdbmsSpec {
         this.bucketName = bucketName;
     }
 
+    public Probe getLivenessProbe() {
+        return livenessProbe;
+    }
+
+    public void setLivenessProbe(Probe livenessProbe) {
+        this.livenessProbe = livenessProbe;
+    }
+
+    public Probe getReadinessProbe() {
+        return readinessProbe;
+    }
+
+    public void setReadinessProbe(Probe readinessProbe) {
+        this.readinessProbe = readinessProbe;
+    }
+
+    public Boolean getrbacEnabled() {
+        return rbacEnabled;
+    }
+
+    public void setrbacEnabled(Boolean rbacEnabled) {
+        this.rbacEnabled = rbacEnabled;
+    }
+
+    public Boolean getsecretEnabled() {
+        return secretEnabled;
+    }
+
+    public void setsecretEnabled(Boolean secretEnabled) {
+        this.secretEnabled = secretEnabled;
+    }
+
+    public Boolean getconfigMapEnabled() {
+        return configMapEnabled;
+    }
+
+    public void setconfigMapEnabled(Boolean configMapEnabled) {
+        this.configMapEnabled = configMapEnabled;
+    }
+
+    public Boolean getingressEnabled() {
+        return ingressEnabled;
+    }
+
+    public void setingressEnabled(Boolean ingressEnabled) {
+        this.ingressEnabled = ingressEnabled;
+    }
+
     @Override
     public String toString() {
         return "PhEeImporterRdbmsSpec{" +
+                "enabled=" + enabled +
                 "replicas=" + replicas +
                 ", image='" + image + '\'' +
                 ", springProfilesActive='" + springProfilesActive + '\'' +
@@ -103,6 +177,12 @@ public class PhEeImporterRdbmsSpec {
                 ", logging=" + logging +
                 ", javaToolOptions='" + javaToolOptions + '\'' +
                 ", bucketName='" + bucketName + '\'' +
+                ", livenessProbe=" + livenessProbe +
+                ", readinessProbe=" + readinessProbe +
+                ", rbacEnabled=" + rbacEnabled +
+                ", secretEnabled=" + secretEnabled +
+                ", configMapEnabled=" + configMapEnabled +
+                ", ingressEnabled=" + ingressEnabled +
                 '}';
     }
 
@@ -111,23 +191,31 @@ public class PhEeImporterRdbmsSpec {
         if (this == o) return true;
         if (!(o instanceof PhEeImporterRdbmsSpec)) return false;
         PhEeImporterRdbmsSpec that = (PhEeImporterRdbmsSpec) o;
-        return Objects.equals(getReplicas(), that.getReplicas()) &&
+        return Objects.equals(getEnabled(), that.getEnabled()) &&
+               Objects.equals(getReplicas(), that.getReplicas()) &&
                Objects.equals(getImage(), that.getImage()) &&
                Objects.equals(getSpringProfilesActive(), that.getSpringProfilesActive()) &&
                Objects.equals(getDatasource(), that.getDatasource()) &&
                Objects.equals(getResources(), that.getResources()) &&
                Objects.equals(getLogging(), that.getLogging()) &&
                Objects.equals(getJavaToolOptions(), that.getJavaToolOptions()) &&
-               Objects.equals(getBucketName(), that.getBucketName());
+               Objects.equals(getBucketName(), that.getBucketName()) &&
+               Objects.equals(getLivenessProbe(), that.getLivenessProbe()) &&
+               Objects.equals(getReadinessProbe(), that.getReadinessProbe()) &&
+               Objects.equals(getrbacEnabled(), that.getrbacEnabled()) &&
+               Objects.equals(getsecretEnabled(), that.getsecretEnabled()) &&
+               Objects.equals(getconfigMapEnabled(), that.getconfigMapEnabled()) &&
+               Objects.equals(getingressEnabled(), that.getingressEnabled());
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(getReplicas(), getImage(), getSpringProfilesActive(),
+        return Objects.hash(getEnabled(), getReplicas(), getImage(), getSpringProfilesActive(),
                             getDatasource(), getResources(), getLogging(),
-                            getJavaToolOptions(), getBucketName());
+                            getJavaToolOptions(), getBucketName(), getLivenessProbe(),
+                            getReadinessProbe(), getrbacEnabled(), getsecretEnabled(),
+                            getconfigMapEnabled(), getingressEnabled());
     }
-
     // Inner classes for nested objects
 
     public static class Datasource {
@@ -367,6 +455,107 @@ public class PhEeImporterRdbmsSpec {
         @Override
         public int hashCode() {
             return Objects.hash(getLevelRoot(), getPatternConsole());
+        }
+    }
+
+    public static class Probe {
+        private String path;
+        private Integer port;
+        private Integer initialDelaySeconds;
+        private Integer periodSeconds;
+        private Integer failureThreshold;
+        private Integer timeoutSeconds;
+
+        public Probe() {
+        }
+
+        public Probe(String path, Integer port, Integer initialDelaySeconds,
+                     Integer periodSeconds, Integer failureThreshold, Integer timeoutSeconds) {
+            this.path = path;
+            this.port = port;
+            this.initialDelaySeconds = initialDelaySeconds;
+            this.periodSeconds = periodSeconds;
+            this.failureThreshold = failureThreshold;
+            this.timeoutSeconds = timeoutSeconds;
+        }
+
+        public String getPath() {
+            return path;
+        }
+
+        public void setPath(String path) {
+            this.path = path;
+        }
+
+        public Integer getPort() {
+            return port;
+        }
+
+        public void setPort(Integer port) {
+            this.port = port;
+        }
+
+        public Integer getInitialDelaySeconds() {
+            return initialDelaySeconds;
+        }
+
+        public void setInitialDelaySeconds(Integer initialDelaySeconds) {
+            this.initialDelaySeconds = initialDelaySeconds;
+        }
+
+        public Integer getPeriodSeconds() {
+            return periodSeconds;
+        }
+
+        public void setPeriodSeconds(Integer periodSeconds) {
+            this.periodSeconds = periodSeconds;
+        }
+
+        public Integer getFailureThreshold() {
+            return failureThreshold;
+        }
+
+        public void setFailureThreshold(Integer failureThreshold) {
+            this.failureThreshold = failureThreshold;
+        }
+
+        public Integer getTimeoutSeconds() {
+            return timeoutSeconds;
+        }
+
+        public void setTimeoutSeconds(Integer timeoutSeconds) {
+            this.timeoutSeconds = timeoutSeconds;
+        }
+
+        @Override
+        public String toString() {
+            return "Probe{" +
+                    "path='" + path + '\'' +
+                    ", port=" + port +
+                    ", initialDelaySeconds=" + initialDelaySeconds +
+                    ", periodSeconds=" + periodSeconds +
+                    ", failureThreshold=" + failureThreshold +
+                    ", timeoutSeconds=" + timeoutSeconds +
+                    '}';
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof Probe)) return false;
+            Probe that = (Probe) o;
+            return Objects.equals(getPath(), that.getPath()) &&
+                   Objects.equals(getPort(), that.getPort()) &&
+                   Objects.equals(getInitialDelaySeconds(), that.getInitialDelaySeconds()) &&
+                   Objects.equals(getPeriodSeconds(), that.getPeriodSeconds()) &&
+                   Objects.equals(getFailureThreshold(), that.getFailureThreshold()) &&
+                   Objects.equals(getTimeoutSeconds(), that.getTimeoutSeconds());
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(getPath(), getPort(), getInitialDelaySeconds(),
+                                getPeriodSeconds(), getFailureThreshold(), getTimeoutSeconds());
         }
     }
 }
