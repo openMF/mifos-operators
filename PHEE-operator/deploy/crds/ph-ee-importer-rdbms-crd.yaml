@@ -105,6 +105,32 @@ spec:
                       type: integer
                     timeoutSeconds:
                       type: integer
+                                # New Ingress Configuration Section
+                ingress:
+                  type: object
+                  properties: 
+                    host:
+                      type: string
+                    path:
+                      type: string
+                      default: "/"
+                    className:
+                      type: string
+                    annotations:
+                      type: object
+                      additionalProperties:
+                        type: string
+                    tls:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          hosts:
+                            type: array
+                            items:
+                              type: string
+                          secretName:
+                            type: string
                 rbacEnabled:  # Toggle for RBACs
                   type: boolean
                   default: false
