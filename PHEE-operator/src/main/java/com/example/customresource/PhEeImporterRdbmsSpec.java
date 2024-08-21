@@ -1,6 +1,7 @@
 package com.example.customresource;
 
-import java.util.Objects;
+import java.util.*;
+
 
 public class PhEeImporterRdbmsSpec {
     private Boolean enabled;
@@ -18,6 +19,7 @@ public class PhEeImporterRdbmsSpec {
     private Boolean secretEnabled;
     private Boolean configMapEnabled;
     private Boolean ingressEnabled;
+    private Ingress ingress; // New Ingress field
 
     public PhEeImporterRdbmsSpec() {
     }
@@ -27,7 +29,8 @@ public class PhEeImporterRdbmsSpec {
                                  String javaToolOptions, String bucketName,
                                  Probe livenessProbe, Probe readinessProbe,
                                  Boolean rbacEnabled, Boolean secretEnabled,
-                                 Boolean configMapEnabled, Boolean ingressEnabled) {
+                                 Boolean configMapEnabled, Boolean ingressEnabled,
+                                 Ingress ingress) {
         this.enabled = enabled;
         this.replicas = replicas;
         this.image = image;
@@ -43,8 +46,8 @@ public class PhEeImporterRdbmsSpec {
         this.secretEnabled = secretEnabled;
         this.configMapEnabled = configMapEnabled;
         this.ingressEnabled = ingressEnabled;
+        this.ingress = ingress;
     }
-
     public Boolean getEnabled() {
         return enabled;
     }
@@ -165,6 +168,15 @@ public class PhEeImporterRdbmsSpec {
         this.ingressEnabled = ingressEnabled;
     }
 
+    // Getter and Setter for ingress
+    public Ingress getIngress() {
+        return ingress;
+    }
+
+    public void setIngress(Ingress ingress) {
+        this.ingress = ingress;
+    }
+
     @Override
     public String toString() {
         return "PhEeImporterRdbmsSpec{" +
@@ -183,6 +195,7 @@ public class PhEeImporterRdbmsSpec {
                 ", secretEnabled=" + secretEnabled +
                 ", configMapEnabled=" + configMapEnabled +
                 ", ingressEnabled=" + ingressEnabled +
+                ", ingress=" + ingress +
                 '}';
     }
 
@@ -205,7 +218,8 @@ public class PhEeImporterRdbmsSpec {
                Objects.equals(getrbacEnabled(), that.getrbacEnabled()) &&
                Objects.equals(getsecretEnabled(), that.getsecretEnabled()) &&
                Objects.equals(getconfigMapEnabled(), that.getconfigMapEnabled()) &&
-               Objects.equals(getingressEnabled(), that.getingressEnabled());
+               Objects.equals(getingressEnabled(), that.getingressEnabled()) &&
+               Objects.equals(getIngress(), that.getIngress());
     }
 
     @Override
@@ -214,7 +228,7 @@ public class PhEeImporterRdbmsSpec {
                             getDatasource(), getResources(), getLogging(),
                             getJavaToolOptions(), getBucketName(), getLivenessProbe(),
                             getReadinessProbe(), getrbacEnabled(), getsecretEnabled(),
-                            getconfigMapEnabled(), getingressEnabled());
+                            getconfigMapEnabled(), getingressEnabled(), getIngress());
     }
     // Inner classes for nested objects
 
@@ -556,6 +570,144 @@ public class PhEeImporterRdbmsSpec {
         public int hashCode() {
             return Objects.hash(getPath(), getPort(), getInitialDelaySeconds(),
                                 getPeriodSeconds(), getFailureThreshold(), getTimeoutSeconds());
+        }
+    }
+    public static class Ingress {
+        private String host;
+        private String path;
+        private String className;
+        private Map<String, String> annotations;
+        private List<TLS> tls;
+
+        public Ingress() {
+        }
+
+        public Ingress(String host, String path, String className, Map<String, String> annotations, List<TLS> tls) {
+            this.host = host;
+            this.path = path;
+            this.className = className;
+            this.annotations = annotations;
+            this.tls = tls;
+        }
+
+        public String getHost() {
+            return host;
+        }
+
+        public void setHost(String host) {
+            this.host = host;
+        }
+
+        public String getPath() {
+            return path;
+        }
+
+        public void setPath(String path) {
+            this.path = path;
+        }
+
+        public String getClassName() {
+            return className;
+        }
+
+        public void setClassName(String className) {
+            this.className = className;
+        }
+
+        public Map<String, String> getAnnotations() {
+            return annotations;
+        }
+
+        public void setAnnotations(Map<String, String> annotations) {
+            this.annotations = annotations;
+        }
+
+        public List<TLS> getTls() {
+            return tls;
+        }
+
+        public void setTls(List<TLS> tls) {
+            this.tls = tls;
+        }
+
+        @Override
+        public String toString() {
+            return "Ingress{" +
+                    "host='" + host + '\'' +
+                    ", path='" + path + '\'' +
+                    ", className='" + className + '\'' +
+                    ", annotations=" + annotations +
+                    ", tls=" + tls +
+                    '}';
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof Ingress)) return false;
+            Ingress ingress = (Ingress) o;
+            return Objects.equals(getHost(), ingress.getHost()) &&
+                   Objects.equals(getPath(), ingress.getPath()) &&
+                   Objects.equals(getClassName(), ingress.getClassName()) &&
+                   Objects.equals(getAnnotations(), ingress.getAnnotations()) &&
+                   Objects.equals(getTls(), ingress.getTls());
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(getHost(), getPath(), getClassName(), getAnnotations(), getTls());
+        }
+
+        // Inner class for TLS settings
+        public static class TLS {
+            private List<String> hosts;
+            private String secretName;
+
+            public TLS() {
+            }
+
+            public TLS(List<String> hosts, String secretName) {
+                this.hosts = hosts;
+                this.secretName = secretName;
+            }
+
+            public List<String> getHosts() {
+                return hosts;
+            }
+
+            public void setHosts(List<String> hosts) {
+                this.hosts = hosts;
+            }
+
+            public String getSecretName() {
+                return secretName;
+            }
+
+            public void setSecretName(String secretName) {
+                this.secretName = secretName;
+            }
+
+            @Override
+            public String toString() {
+                return "TLS{" +
+                        "hosts=" + hosts +
+                        ", secretName='" + secretName + '\'' +
+                        '}';
+            }
+
+            @Override
+            public boolean equals(Object o) {
+                if (this == o) return true;
+                if (!(o instanceof TLS)) return false;
+                TLS tls = (TLS) o;
+                return Objects.equals(getHosts(), tls.getHosts()) &&
+                       Objects.equals(getSecretName(), tls.getSecretName());
+            }
+
+            @Override
+            public int hashCode() {
+                return Objects.hash(getHosts(), getSecretName());
+            }
         }
     }
 }

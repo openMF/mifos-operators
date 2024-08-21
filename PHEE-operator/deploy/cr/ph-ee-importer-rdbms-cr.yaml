@@ -1,12 +1,12 @@
 apiVersion: my.custom.group/v1
 kind: PhEeImporterRdbms
 metadata:
-  name: importer-rdbms
+  name: ph-ee-importer-rdbms
   namespace: paymenthub
 spec:
   enabled: true
   replicas: 1
-  image: docker.io/openmf/ph-ee-importer-rdbms:v1.7.1
+  image: docker.io/openmf/ph-ee-importer-rdbms:v1.13.1  # Updated image version
   springProfilesActive: local,tenantsConnection
   datasource:
     username: mifos
@@ -25,22 +25,34 @@ spec:
       cpu: 100m
       memory: 256Mi
   javaToolOptions: "-Xmx256M"
-  bucketName: paymenthub-ee-dev
-  livenessProbe:
-    path: /actuator/health/liveness
-    port: 9191
-    initialDelaySeconds: 120
-    periodSeconds: 30
-    failureThreshold: 3
-    timeoutSeconds: 5
-  readinessProbe:
-    path: /actuator/health/readiness
-    port: 9191
-    initialDelaySeconds: 120
-    periodSeconds: 30
-    failureThreshold: 3
-    timeoutSeconds: 5
-  rbacEnabled: true  # Toggle for RBACs
-  secretEnabled: true  # Toggle for Secrets
-  configMapEnabled: false  # Toggle for ConfigMaps
-  ingressEnabled: false  # Toggle for Ingress
+  bucketName: paymenthub-ee  # Corrected bucket name
+  # livenessProbe:
+  #   path: /actuator/health/liveness
+  #   port: 9191
+  #   initialDelaySeconds: 120
+  #   periodSeconds: 30
+  #   failureThreshold: 3
+  #   timeoutSeconds: 5
+  # readinessProbe:
+  #   path: /actuator/health/readiness
+  #   port: 9191
+  #   initialDelaySeconds: 120
+  #   periodSeconds: 30
+  #   failureThreshold: 3
+  #   timeoutSeconds: 5
+  ingress:  # Ingress configuration
+    host: "ops.sandbox.fynarfin.io"  # Host from the provided Ingress describe
+    path: "/"  # Path as indicated in the Ingress describe
+    className: "nginx"  # Ingress class as indicated in annotations
+    annotations:  # Annotations from the provided Ingress describe
+      kubernetes.io/ingress.class: "nginx"
+      meta.helm.sh/release-name: "moja-ph"
+      meta.helm.sh/release-namespace: "paymenthub"
+    tls:  # TLS configuration from the provided Ingress describe
+      - hosts:
+          - "ops.sandbox.fynarfin.io"
+        secretName: "sandbox-secret"  # Secret name from the provided Ingress describe
+  rbacEnabled: true  # Toggle for RBACs (optional, ensure it's necessary)
+  secretEnabled: true  # Toggle for Secrets (relevant due to the usage of secrets in the deployment)
+  configMapEnabled: false  # not working due to non dynamic naming,,, Enabled to match the usage of the ConfigMap `ph-ee-config`
+  ingressEnabled: true  # Ingress not mentioned, keep as false unless required
