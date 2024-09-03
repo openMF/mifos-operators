@@ -1,3 +1,56 @@
-ph-ee-engine: 
-  importer_rdbms:
+ph-ee-engine:  
+
+  ph_ee_connector_ams_mifos:
+    enabled: false
+    
+  ph_ee_connector_mojaloop:
+    enabled: false
+
+  mockpayment:
     enabled: false 
+
+  channel:
+    enabled: false
+
+  operations_app:
+    enabled: false
+
+  operations_web:
+    enabled: false
+
+  ph_ee_connector_gsma:
+    enabled: false
+   
+  mpesa:
+    enabled: false
+    
+  notifications:
+    enabled: false
+
+  connector_bulk:
+    enabled: true
+        
+  zeebe_ops:
+    enabled: false
+
+  messagegateway:
+    enabled: false
+
+  importer_es:
+    enabled: false
+
+  importer_rdbms:
+    enabled: false
+
+  vouchers:
+    enabled: false
+
+  billPay:
+    enabled: false
+
+  crm:
+    enabled: false
+ 
+
+ 
+  

@@ -1,17 +1,17 @@
-package com.example.customresource;
+package com.paymenthub.customresource;
 
 import java.util.Objects;
 
-public class PhEeImporterRdbmsStatus {
+public class PaymentHubDeploymentStatus {
     private Integer availableReplicas;
     private String errorMessage;
     private String lastAppliedImage;
     private boolean ready;
 
-    public PhEeImporterRdbmsStatus() {
+    public PaymentHubDeploymentStatus() {
     }
 
-    public PhEeImporterRdbmsStatus(Integer availableReplicas, String errorMessage, String lastAppliedImage, boolean ready) {
+    public PaymentHubDeploymentStatus(Integer availableReplicas, String errorMessage, String lastAppliedImage, boolean ready) {
         this.availableReplicas = availableReplicas;
         this.errorMessage = errorMessage;
         this.lastAppliedImage = lastAppliedImage;
@@ -52,7 +52,7 @@ public class PhEeImporterRdbmsStatus {
 
     @Override
     public String toString() {
-        return "PhEeImporterRdbmsStatus{" +
+        return "PaymentHubDeploymentStatus{" +
                 "availableReplicas=" + availableReplicas +
                 ", errorMessage='" + errorMessage + '\'' +
                 ", lastAppliedImage='" + lastAppliedImage + '\'' +
@@ -63,8 +63,8 @@ public class PhEeImporterRdbmsStatus {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof PhEeImporterRdbmsStatus)) return false;
-        PhEeImporterRdbmsStatus that = (PhEeImporterRdbmsStatus) o;
+        if (!(o instanceof PaymentHubDeploymentStatus)) return false;
+        PaymentHubDeploymentStatus that = (PaymentHubDeploymentStatus) o;
         return ready == that.ready &&
                Objects.equals(availableReplicas, that.availableReplicas) &&
                Objects.equals(errorMessage, that.errorMessage) &&

@@ -1,15 +1,24 @@
-package com.example.utils;
+package com.paymenthub.utils;
 
 import io.fabric8.kubernetes.client.KubernetesClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.example.customresource.PhEeImporterRdbms;
+import com.paymenthub.customresource.PaymentHubDeployment;
 
-public class ResourceDeletionUtil {
+/**
+ * Utility class for handling the deletion of Kubernetes resources associated with a custom resource.
+ */
+public class DeletionUtil {
 
-    private static final Logger log = LoggerFactory.getLogger(ResourceDeletionUtil.class);
+    private static final Logger log = LoggerFactory.getLogger(DeletionUtil.class);
 
-    public static void deleteResources(KubernetesClient kubernetesClient, PhEeImporterRdbms resource) {
+    /**
+     * Deletes all Kubernetes resources associated with the specified custom resource.
+     * 
+     * @param kubernetesClient The Kubernetes client used to interact with the Kubernetes API.
+     * @param resource The custom resource whose associated resources are to be deleted.
+     */
+    public static void deleteResources(KubernetesClient kubernetesClient, PaymentHubDeployment resource) {
         String namespace = resource.getMetadata().getNamespace();
         String name = resource.getMetadata().getName();
 
@@ -34,7 +43,14 @@ public class ResourceDeletionUtil {
         deleteIngressResources(kubernetesClient, resource);
     }
 
-    public static void deleteRbacResources(KubernetesClient kubernetesClient, PhEeImporterRdbms resource) {
+    /**
+     * Deletes all RBAC-related resources (ServiceAccount, Role, RoleBinding, ClusterRole, ClusterRoleBinding)
+     * associated with the specified custom resource.
+     * 
+     * @param kubernetesClient The Kubernetes client used to interact with the Kubernetes API.
+     * @param resource The custom resource whose RBAC-related resources are to be deleted.
+     */
+    public static void deleteRbacResources(KubernetesClient kubernetesClient, PaymentHubDeployment resource) {
         String namespace = resource.getMetadata().getNamespace();
         String name = resource.getMetadata().getName();
         String saName = name + "-sa";
@@ -84,7 +100,13 @@ public class ResourceDeletionUtil {
         }
     }
 
-    public static void deleteSecretResources(KubernetesClient kubernetesClient, PhEeImporterRdbms resource) {
+    /**
+     * Deletes the Secret associated with the specified custom resource.
+     * 
+     * @param kubernetesClient The Kubernetes client used to interact with the Kubernetes API.
+     * @param resource The custom resource whose Secret is to be deleted.
+     */
+    public static void deleteSecretResources(KubernetesClient kubernetesClient, PaymentHubDeployment resource) {
         String namespace = resource.getMetadata().getNamespace();
         String name = resource.getMetadata().getName();
         String secretName = name + "-secret";
@@ -98,7 +120,13 @@ public class ResourceDeletionUtil {
         }
     }
 
-    public static void deleteConfigMapResources(KubernetesClient kubernetesClient, PhEeImporterRdbms resource) {
+    /**
+     * Deletes the ConfigMap associated with the specified custom resource.
+     * 
+     * @param kubernetesClient The Kubernetes client used to interact with the Kubernetes API.
+     * @param resource The custom resource whose ConfigMap is to be deleted.
+     */
+    public static void deleteConfigMapResources(KubernetesClient kubernetesClient, PaymentHubDeployment resource) {
         String namespace = resource.getMetadata().getNamespace();
         String name = resource.getMetadata().getName();
         String configMapName = name + "-configmap";
@@ -112,7 +140,13 @@ public class ResourceDeletionUtil {
         }
     }
 
-    public static void deleteIngressResources(KubernetesClient kubernetesClient, PhEeImporterRdbms resource) {
+    /**
+     * Deletes the Ingress associated with the specified custom resource.
+     * 
+     * @param kubernetesClient The Kubernetes client used to interact with the Kubernetes API.
+     * @param resource The custom resource whose Ingress is to be deleted.
+     */
+    public static void deleteIngressResources(KubernetesClient kubernetesClient, PaymentHubDeployment resource) {
         String namespace = resource.getMetadata().getNamespace();
         String name = resource.getMetadata().getName();
         String ingressName = name + "-ingress";
