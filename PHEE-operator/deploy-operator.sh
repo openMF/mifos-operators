@@ -1,9 +1,5 @@
 #!/bin/bash
 
-# Commands that can be used for this script
-# ./deploy-operator.sh -m deploy 
-# ./deploy-operator.sh -m cleanup
-
 # Exit script on any error
 set -e
 
@@ -17,7 +13,7 @@ NC='\033[0m' # No Color
 
 
 # Common Environment Setup for both deploy and cleanup
-export IMAGE_NAME="ph-ee-importer-rdbms-operator"
+export IMAGE_NAME="ph-ee-operator"
 export IMAGE_TAG="latest"
 export OPERATOR_NAMESPACE="default"   
 export HELM_CHART_PATH="../mifos-gazelle/src/mojafos/deployer/apps/ph_template/helm/gazelle"   
@@ -46,7 +42,7 @@ deploy_operator() {
         exit 1
     fi
 
-    # Check if Java is installed, if not, install it
+    # # Check if Java is installed, if not, install it
     if ! command -v java &> /dev/null
     then
         echo -e "${YELLOW}Java is not installed. Installing OpenJDK 21...${NC}"
@@ -57,7 +53,7 @@ deploy_operator() {
         echo -e "${GREEN}Java is already installed.${NC}"
     fi
 
-    # Check if Maven is installed, if not, install it
+    # # Check if Maven is installed, if not, install it
     if ! command -v mvn &> /dev/null
     then
         echo -e "${YELLOW}Maven is not installed. Installing Maven...${NC}"
@@ -69,8 +65,8 @@ deploy_operator() {
 
     echo -e "${GREEN}Pre-requisites are met.${NC}"
 
-    # 2. Upgrading the Helm chart with ys_values.yaml
-    echo -e "${BLUE}Upgrading helm chart...${NC}" 
+    # 2. Check if there are any changes before upgrading the Helm chart
+    echo -e "${BLUE}Upgrading the helm chart...${NC}"
     helm upgrade $RELEASE_NAME $HELM_CHART_PATH -n $HELM_NAMESPACE -f $VALUES_FILE || { echo -e "${RED}Helm upgrade failed. Exiting.${NC}"; exit 1; }
     echo -e "${GREEN}Helm chart upgrade successful.${NC}"
 
@@ -86,7 +82,7 @@ deploy_operator() {
 
     # 5. Save the Docker Image to a TAR File
     echo -e "${BLUE}Saving the Docker image to a TAR file...${NC}"
-    sudo docker save $IMAGE_NAME:$IMAGE_TAG -o $IMAGE_NAME.tar || { echo -e "${RED}Docker save failed. Exiting.${NC}"; exit 1; }
+    docker save $IMAGE_NAME:$IMAGE_TAG -o $IMAGE_NAME.tar || { echo -e "${RED}Docker save failed. Exiting.${NC}"; exit 1; }
     echo -e "${GREEN}Docker image saved to TAR file.${NC}"
 
     # 6. Import the Docker Image into k3s Cluster
@@ -96,22 +92,23 @@ deploy_operator() {
 
     # 7. Apply CRD, Operator, and CR
     echo -e "${BLUE}Applying CRD...${NC}"
-    kubectl apply -f deploy/crds/ph-ee-importer-rdbms-crd.yaml
+    kubectl apply -f deploy/crds/ph-ee-CustomResourceDefinition.yaml
     echo -e "${GREEN}CRD applied successfully.${NC}"
 
     echo -e "${BLUE}Deploying the operator...${NC}"
-    kubectl apply -f deploy/operator/operator.yaml
+    kubectl apply -f deploy/operator/operator_deployment_manifests.yaml
     echo -e "${GREEN}Operator deployed successfully.${NC}"
 
     echo -e "${BLUE}Applying CR...${NC}"
-    kubectl apply -f deploy/cr/ph-ee-importer-rdbms-cr.yaml
+    kubectl apply -f deploy/cr/ph-ee-CustomResource.yaml
     echo -e "${GREEN}CR applied successfully.${NC}"
 
     # 8. Post-Deployment Verification
     echo -e "${BLUE}Verifying deployment...${NC}"
-    kubectl rollout status deployment/phee-importer-operator -n $OPERATOR_NAMESPACE || { echo -e "${RED}Deployment verification failed. Exiting.${NC}"; exit 1; }
+    kubectl rollout status deployment/ph-ee-operator -n $OPERATOR_NAMESPACE || { echo -e "${RED}Deployment verification failed. Exiting.${NC}"; exit 1; }
 
     echo -e "${GREEN}${BOLD}Operator deployment completed successfully!${NC}"
+  
 }
 
 # Function to clean up the deployed resources
@@ -127,15 +124,15 @@ cleanup_operator() {
     echo -e "${YELLOW}${BOLD}Starting Cleanup...${NC}"
 
     echo -e "${BLUE}Deleting CR...${NC}"
-    kubectl delete -f deploy/cr/ph-ee-importer-rdbms-cr.yaml || { echo -e "${RED}Failed to delete CR. Exiting.${NC}"; exit 1; }
+    kubectl delete -f deploy/cr/ph-ee-CustomResource.yaml || { echo -e "${RED}Failed to delete CR. Exiting.${NC}"; exit 1; }
     echo -e "${GREEN}CR deleted successfully.${NC}"
 
     echo -e "${BLUE}Deleting operator...${NC}"
-    kubectl delete -f deploy/operator/operator.yaml || { echo -e "${RED}Failed to delete operator. Exiting.${NC}"; exit 1; }
+    kubectl delete -f deploy/operator/operator_deployment_manifests.yaml || { echo -e "${RED}Failed to delete operator. Exiting.${NC}"; exit 1; }
     echo -e "${GREEN}Operator deleted successfully.${NC}"
 
     echo -e "${BLUE}Deleting CRD...${NC}"
-    kubectl delete -f deploy/crds/ph-ee-importer-rdbms-crd.yaml || { echo -e "${RED}Failed to delete CRD. Exiting.${NC}"; exit 1; }
+    kubectl delete -f deploy/crds/ph-ee-CustomResourceDefinition.yaml || { echo -e "${RED}Failed to delete CRD. Exiting.${NC}"; exit 1; }
     echo -e "${GREEN}CRD deleted successfully.${NC}"
 
     if [[ -z "$IMAGE_NAME" || -z "$IMAGE_TAG" ]]; then
@@ -153,6 +150,34 @@ cleanup_operator() {
     echo -e "${GREEN}${BOLD}Cleanup completed successfully!${NC}"
 }
 
+update_cr () {
+        # Display script banner
+    echo -e "${BLUE}${BOLD}"
+    echo "===================================================="
+    echo "              Updating Custom Resource(CR)          "
+    echo "===================================================="
+    echo -e "${NC}"
+
+    echo -e "${BLUE}Updating CR...${NC}"
+    kubectl apply -f deploy/cr/ph-ee-CustomResource.yaml
+    echo -e "${GREEN}CR applied successfully.${NC}"
+
+}
+
+update_operator () {
+        # Display script banner
+    echo -e "${BLUE}${BOLD}"
+    echo "===================================================="
+    echo "              Updating Operator Deployment          "
+    echo "===================================================="
+    echo -e "${NC}"
+
+    echo -e "${BLUE}Deploying the operator...${NC}"
+    kubectl apply -f deploy/operator/operator_deployment_manifests.yaml
+    echo -e "${GREEN}Operator deployed successfully.${NC}"
+
+}
+
 # Main script logic to handle different modes
 if [ "$1" == "-m" ]; then
     case "$2" in
@@ -167,12 +192,29 @@ if [ "$1" == "-m" ]; then
             exit 1
             ;;
     esac
+elif [ "$1" == "-u" ]; then
+    case "$2" in
+        cr)
+            update_cr
+            ;;
+        operator)
+            update_operator
+            ;;
+        *)
+            echo -e "${RED}Invalid update mode specified. Use '-u cr' or '-u operator'.${NC}"
+            exit 1
+            ;;
+    esac
 else
-    echo -e "${YELLOW}Usage: ./deploy-operator.sh -m <mode>${NC}"
+    echo -e "${YELLOW}Usage: ./deploy-operator.sh -m <mode> or ./deploy-operator.sh -u <update_mode>${NC}"
     echo "Modes:"
-    echo "  ${GREEN}deploy${NC}   - Upgrade Helm chart, build, deploy, and verify the operator."
-    echo "  ${GREEN}cleanup${NC}  - Remove the operator and related resources."
+    echo -e "  ${GREEN}deploy${NC}   - Upgrade Helm chart, build, deploy, and verify the operator."
+    echo -e "  ${GREEN}cleanup${NC}  - Remove the operator and related resources."
+    echo "Update Modes:"
+    echo -e "  ${GREEN}cr${NC}        - Apply updates to the Custom Resource (CR)."
+    echo -e "  ${GREEN}operator${NC}  - Apply updates to the operator deployment."
     exit 1
 fi
+
 
 # End of script
