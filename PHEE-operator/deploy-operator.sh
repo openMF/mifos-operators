@@ -35,14 +35,14 @@ deploy_operator() {
 
     # 1. Pre-requisites Check
     echo -e "${BLUE}Checking pre-requisites...${NC}"
-    # Check if kubectl, docker, mvn, and helm are installed
+    Check if kubectl, docker, mvn, and helm are installed
     if ! command -v kubectl &> /dev/null || ! command -v docker &> /dev/null || ! command -v helm &> /dev/null
     then
         echo -e "${RED}kubectl, docker, and helm are required but not installed. Exiting.${NC}"
         exit 1
     fi
 
-    # # Check if Java is installed, if not, install it
+    # Check if Java is installed, if not, install it
     if ! command -v java &> /dev/null
     then
         echo -e "${YELLOW}Java is not installed. Installing OpenJDK 21...${NC}"
@@ -53,7 +53,7 @@ deploy_operator() {
         echo -e "${GREEN}Java is already installed.${NC}"
     fi
 
-    # # Check if Maven is installed, if not, install it
+    # Check if Maven is installed, if not, install it
     if ! command -v mvn &> /dev/null
     then
         echo -e "${YELLOW}Maven is not installed. Installing Maven...${NC}"
@@ -65,19 +65,19 @@ deploy_operator() {
 
     echo -e "${GREEN}Pre-requisites are met.${NC}"
 
-    # 2. Check if there are any changes before upgrading the Helm chart
-    echo -e "${BLUE}Upgrading the helm chart...${NC}"
+    # 2. Upgrading the current helm chart deployment
+    echo -e "${BLUE}Upgrading current helm deployment...${NC}"
     helm upgrade $RELEASE_NAME $HELM_CHART_PATH -n $HELM_NAMESPACE -f $VALUES_FILE || { echo -e "${RED}Helm upgrade failed. Exiting.${NC}"; exit 1; }
     echo -e "${GREEN}Helm chart upgrade successful.${NC}"
 
     # 3. Build the Java Project
     echo -e "${BLUE}Building the Java project...${NC}"
-    mvn clean install || { echo -e "${RED}Maven build failed. Exiting.${NC}"; exit 1; }
+    mvn clean package || { echo -e "${RED}Maven build failed. Exiting.${NC}"; exit 1; }
     echo -e "${GREEN}Java project build successful.${NC}"
 
     # 4. Build the Docker Image Locally
     echo -e "${BLUE}Building the Docker image locally...${NC}"
-    mvn compile jib:dockerBuild -Dimage=$IMAGE_NAME:$IMAGE_TAG || { echo -e "${RED}Docker image build failed. Exiting.${NC}"; exit 1; }
+    docker build -t $IMAGE_NAME:$IMAGE_TAG . || { echo -e "${RED}Docker image build failed. Exiting.${NC}"; exit 1; }
     echo -e "${GREEN}Docker image build successful.${NC}"
 
     # 5. Save the Docker Image to a TAR File
@@ -124,22 +124,22 @@ cleanup_operator() {
     echo -e "${YELLOW}${BOLD}Starting Cleanup...${NC}"
 
     echo -e "${BLUE}Deleting CR...${NC}"
-    kubectl delete -f deploy/cr/ph-ee-CustomResource.yaml || { echo -e "${RED}Failed to delete CR. Exiting.${NC}"; exit 1; }
+    kubectl delete -f deploy/cr/ph-ee-CustomResource.yaml || { echo -e "${RED}Failed to delete CR. Exiting.${NC}"; }
     echo -e "${GREEN}CR deleted successfully.${NC}"
 
     echo -e "${BLUE}Deleting operator...${NC}"
-    kubectl delete -f deploy/operator/operator_deployment_manifests.yaml || { echo -e "${RED}Failed to delete operator. Exiting.${NC}"; exit 1; }
+    kubectl delete -f deploy/operator/operator_deployment_manifests.yaml || { echo -e "${RED}Failed to delete operator. Exiting.${NC}"; }
     echo -e "${GREEN}Operator deleted successfully.${NC}"
 
     echo -e "${BLUE}Deleting CRD...${NC}"
-    kubectl delete -f deploy/crds/ph-ee-CustomResourceDefinition.yaml || { echo -e "${RED}Failed to delete CRD. Exiting.${NC}"; exit 1; }
+    kubectl delete -f deploy/crds/ph-ee-CustomResourceDefinition.yaml || { echo -e "${RED}Failed to delete CRD. Exiting.${NC}"; }
     echo -e "${GREEN}CRD deleted successfully.${NC}"
 
     if [[ -z "$IMAGE_NAME" || -z "$IMAGE_TAG" ]]; then
         echo -e "${YELLOW}Image name or tag is not set correctly. Skipping Docker image removal.${NC}"
     else
         echo -e "${BLUE}Removing local Docker image...${NC}"
-        docker rmi $IMAGE_NAME:$IMAGE_TAG || { echo -e "${RED}Failed to remove Docker image. Exiting.${NC}"; exit 1; }
+        docker rmi $IMAGE_NAME:$IMAGE_TAG || { echo -e "${RED}Failed to remove Docker image. Exiting.${NC}"; }
         echo -e "${GREEN}Docker image removed successfully.${NC}"
     fi
 

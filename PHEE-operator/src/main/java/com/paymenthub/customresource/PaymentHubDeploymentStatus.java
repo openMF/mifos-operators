@@ -2,6 +2,14 @@ package com.paymenthub.customresource;
 
 import java.util.Objects;
 
+/**
+ * Represents the status of a PaymentHub deployment.
+ * 
+ * This class encapsulates information about the deployment's current state, including the number of available replicas,
+ * any error messages, the last applied image, and whether the deployment is ready. It provides getter and setter methods
+ * to access and modify these properties, as well as `toString()`, `equals()`, and `hashCode()` methods for object comparison
+ * and representation.
+ */
 public class PaymentHubDeploymentStatus {
     private Integer availableReplicas;
     private String errorMessage;

@@ -137,6 +137,7 @@ public class PaymentHubDeploymentController implements Reconciler<PaymentHubDepl
                 if (resource.getSpec().getIngressEnabled() == null || !resource.getSpec().getIngressEnabled()) {
                     log.info("Ingress for resource {} is disabled, deleting associated Ingress resources.", resourceName);
                     DeletionUtil.deleteIngressResources(kubernetesClient, resource);
+                    DeletionUtil.deleteService(kubernetesClient, resource);
                 } else {
                     // INFO level log to indicate Ingress and Service reconciliation
                     log.info("Reconciling Ingress and Service for {}.", resourceName);
@@ -179,7 +180,7 @@ public class PaymentHubDeploymentController implements Reconciler<PaymentHubDepl
             deploymentResource.create(deployment);
             log.info("Created new Deployment: {}", resource.getMetadata().getName());
         } else {
-            deploymentResource.patch(deployment);
+            deploymentResource.replace(deployment);
             log.info("Updated existing Deployment: {}", resource.getMetadata().getName());
         }
     }
@@ -228,15 +229,28 @@ public class PaymentHubDeploymentController implements Reconciler<PaymentHubDepl
         // Add volume mount conditionally
         if (resource.getSpec().getVolMount() != null && Boolean.TRUE.equals(resource.getSpec().getVolMount().getEnabled())) {
             String volMountName = resource.getSpec().getVolMount().getName();
+            String deploymentName = resource.getMetadata().getName();
+
             if (volMountName != null) {
-                containerBuilder.withVolumeMounts(new VolumeMountBuilder()
-                    .withName(volMountName)
-                    .withMountPath("/config")
-                    .build());
+                VolumeMountBuilder volumeMountBuilder = new VolumeMountBuilder().withName(volMountName);
+
+                // Check the deployment name and set the appropriate path
+                if ("ph-ee-operations-web".equals(deploymentName)) {
+                    // For ph-ee-operations-web, use the specific path and subPath
+                    volumeMountBuilder
+                        .withMountPath("/usr/share/nginx/html/assets/configuration.properties")
+                        .withSubPath("configuration.properties");
+                } else {
+                    // For other deployments, use the generic /config  
+                    volumeMountBuilder.withMountPath("/config");
+                }
+
+                containerBuilder.withVolumeMounts(volumeMountBuilder.build());
             } else {
                 log.warn("Volume mount name is null, skipping volume mount.");
             }
         }
+
 
         Container container = containerBuilder.build();
 

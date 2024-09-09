@@ -53,17 +53,17 @@ spec:
     - name: CLOUD_AWS_REGION_STATIC
       valueFrom:
         secretKeyRef:
-          name: bulk-processor-secret
+          name: ph-ee-connector-bulk-secret
           key: aws-region
     - name: AWS_ACCESS_KEY
       valueFrom:
         secretKeyRef:
-          name: bulk-processor-secret
+          name: ph-ee-connector-bulk-secret
           key: aws-access-key
     - name: AWS_SECRET_KEY
       valueFrom:
         secretKeyRef:
-          name: bulk-processor-secret
+          name: ph-ee-connector-bulk-secret
           key: aws-secret-key
 
 ---
@@ -114,6 +114,95 @@ spec:
           name: elastic-credentials
           key: password
 
+---
+
+apiVersion: gazelle.mifos.io/v1
+kind: PaymentHubDeployment
+metadata:
+  name: message-gateway
+  namespace: paymenthub
+spec:
+  enabled: true
+  volMount:
+    enabled: true
+    name: ph-ee-config  # This is from the pod description.
+  replicas: 1
+  image: docker.io/openmf/message-gateway:v1.2.0  # From the pod description.
+  containerPort: 9191  # From the pod description.
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512M
+    requests:
+      cpu: 100m
+      memory: 256M 
+  rbacEnabled: false
+  secretEnabled: true
+  configMapEnabled: false
+  ingressEnabled: true
+  initContainerEnabled: true
+  ingress:
+    className: nginx  # From ingress description.
+    annotations:
+      kubernetes.io/ingress.class: nginx
+    tls:
+      - secretName: sandbox-secret  # From ingress description.
+    rules:
+      - host: messagegateway.local  # From ingress description.
+        paths:
+          - path: "/"
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: "message-gateway"
+                port:
+                  number: 80  # From service description.
+  services:
+    - name: message-gateway
+      ports:
+        - name: port
+          port: 80
+          targetPort: 9191  # From service description.
+          protocol: TCP
+      selector:
+        app: message-gateway
+      sessionAffinity: None
+      type: ClusterIP
+  environment:
+    - name: SPRING_DATASOURCE_URL
+      value: "jdbc:mysql:thin://operationsmysql:3306/messagegateway"
+    - name: MYSQL_USERNAME
+      value: "mifos"
+    - name: ZEEBE_BROKER_CONTACTPOINT
+      value: "phee-zeebe-gateway:26500"
+    - name: MYSQL_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: message-gateway-secret
+          key: database-password
+    - name: CALLBACKCONFIG_HOST
+      value: "ph-ee-connector-notifications"
+    - name: HOSTCONFIG_HOST
+      value: "message-gateway"
+    - name: PROVIDERSOURCE_FROMDATABASE
+      value: "disabled"
+    - name: PROVIDERSOURCE_FROMYML
+      value: "enabled"
+    - name: LOGGING_LEVEL_ROOT
+      value: "INFO"
+    - name: PROVIDERKEYS_TELERIVETAPIKEY
+      valueFrom:
+        secretKeyRef:
+          name: message-gateway-secret
+          key: api-key
+    - name: PROVIDERKEYS_TELERIVETPROJECTID
+      valueFrom:
+        secretKeyRef:
+          name: message-gateway-secret
+          key: project-id
+    - name: ZEEBE_BROKER_CONTACTPOINT
+      value: "phee-zeebe-gateway:26500"
+ 
 ---
 
 apiVersion: gazelle.mifos.io/v1
@@ -974,375 +1063,286 @@ spec:
 
 ---
 
-# apiVersion: gazelle.mifos.io/v1
-# kind: PaymentHubDeployment
-# metadata:
-#   name: ph-ee-operations-web
-#   namespace: paymenthub
-# spec:
-#   enabled: true
-#   volMount:
-#     enabled: true
-#     name: ph-ee-operations-web-config
-#   replicas: 1
-#   image: docker.io/openmf/ph-ee-operations-web:v1.20.0
-#   containerPort: 80
-#   resources:
-#     limits:
-#       cpu: 500m
-#       memory: 512M
-#     requests:
-#       cpu: 100m
-#       memory: 256M
-#   rbacEnabled: false
-#   secretEnabled: true
-#   configMapEnabled: true
-#   ingressEnabled: true
-#   ingress:
-#     className: nginx
-#     annotations:
-#       meta.helm.sh/release-name: phee
-#       meta.helm.sh/release-namespace: paymenthub
-#     tls:
-#       - secretName: sandbox-secret
-#     rules:
-#       - host: ops.local
-#         paths:
-#           - path: "/"
-#             pathType: ImplementationSpecific
-#             backend:
-#               service:
-#                 name: "ph-ee-operations-web"
-#                 port:
-#                   number: 4200
-#   services:
-#     - name: ph-ee-operations-web
-#       ports:
-#         - name: port
-#           port: 4200
-#           targetPort: 80
-#           protocol: TCP
-#       selector:
-#         app: ph-ee-operations-web
-#       sessionAffinity: None
-#       type: ClusterIP
-#   environment:
-#     - name: PH_OPS_BACKEND_SERVER_URL
-#       value: "http://ph-ee-operations-app"
-#     - name: PH_VOU_BACKEND_SERVER_URL
-#       value: "http://ph-ee-vouchers"
-#     - name: PH_ACT_BACKEND_SERVER_URL
-#       value: "http://ph-ee-identity-account-mapper"
-#     - name: PH_PLATFORM_TENANT_ID
-#       value: "gorilla"
-#     - name: PH_PLATFORM_TENANT_IDS
-#       value: "gorilla"
-#     - name: PH_REGISTERING_INSTITUTION_ID
-#       value: "123"
-#     - name: PH_AUTH_ENABLED
-#       value: "false"
-#     - name: PH_OAUTH_ENABLED
-#       value: "false"
-#     - name: PH_OAUTH_TYPE
-#       value: "keycloak"
-#     - name: PH_OAUTH_SERVER_URL
-#       value: "http://keycloak.sandbox.fynarfin.io/auth"
-#     - name: PH_OAUTH_REALM
-#       value: "paymenthub"
-#     - name: PH_OAUTH_CLIENT_ID
-#       value: "opsapp"
-#     - name: PH_OAUTH_CLIENT_SECRET
-#       value: "Y2xpZW50Og=="
-#     - name: PH_OAUTH_BASIC_AUTH
-#       value: "true"
-#     - name: PH_OAUTH_BASIC_AUTH_TOKEN
-#       value: "Y2xpZW50Og=="
-#     - name: PH_DEFAULT_LANGUAGE
-#       value: "en"
-#     - name: PH_SUPPORTED_LANGUAGES
-#       value: "en,fr,es"
+apiVersion: gazelle.mifos.io/v1
+kind: PaymentHubDeployment
+metadata:
+  name: ph-ee-connector-bulk
+  namespace: paymenthub
+spec:
+  enabled: true
+  volMount:
+    enabled: true
+    name: ph-ee-config
+  replicas: 1
+  image: docker.io/openmf/ph-ee-bulk-processor:v1.12.1
+  containerPort: 5000
+  resources:
+    limits:
+      cpu: 256m
+      memory: 384M
+    requests:
+      cpu: 100m
+      memory: 256M
+  rbacEnabled: false  # Assuming RBAC is not enabled; adjust if needed
+  secretEnabled: true
+  configMapEnabled: false
+  ingressEnabled: true
+  ingress:
+    className: nginx
+    annotations:
+      kubernetes.io/ingress.class: nginx
+      konghq.com/plugins: cors 
+    tls:
+      - secretName: sandbox-secret
+    rules:
+      - host: bulk-connector.local
+        paths:
+          - path: "/"
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: "ph-ee-connector-bulk"
+                port:
+                  number: 8443
+  services:
+    - name: ph-ee-connector-bulk
+      annotations:
+        konghq.com/protocol: https
+      ports:
+        - name: port
+          port: 8443
+          targetPort: 8443
+          protocol: TCP
+      selector:
+        app: ph-ee-connector-bulk
+      sessionAffinity: None
+      type: ClusterIP
+  environment:
+    - name: SPRING_PROFILES_ACTIVE
+      value: "bb"
+    - name: CAMEL_DISABLE-SSL
+      value: "true"
+    - name: ZEEBE_BROKER_CONTACTPOINT
+      value: "phee-zeebe-gateway:26500"
+    - name: ZEEBE_CLIENT_MAX-EXECUTION-THREADS
+      value: "50"
+    - name: ZEEBE_CLIENT_POLL-INTERVAL
+      value: "10"
+    - name: TENANTS
+      value: "rhino,gorilla,wakanda,pluto,venus,jupiter"
+    - name: APPLICATION_BUCKET-NAME
+      value: "paymenthub-ee"
+    - name: OPERATIONS-APP_CONTACTPOINT
+      value: "http://ph-ee-operations-app:80"
+    - name: OPERATIONS-APP_ENDPOINTS_BATCH-TRANSACTION
+      value: "/api/v1/batch/transactions"
+    - name: CONFIG_PARTYLOOKUP_ENABLE
+      value: "false"
+    - name: CONFIG_APPROVAL_ENABLE
+      value: "false"
+    - name: CONFIG_ORDERING_ENABLE
+      value: "false"
+    - name: CONFIG_SPLITTING_ENABLE
+      value: "true"
+    - name: CONFIG_SPLITTING_SUB_BATCH_SIZE
+      value: "5"
+    - name: CONFIG_FORMATTING_ENABLE
+      value: "false"
+    - name: CONFIG_FORMATTING_STANDARD
+      value: "DEFAULT"
+    - name: CONFIG_MERGEBACK_ENABLE
+      value: "true"
+    - name: CONFIG_BACKPRESSURE_ENABLE
+      value: "false"
+    - name: CONFIG_COMPLETION-THRESHOLD-CHECK_ENABLE
+      value: "true"
+    - name: CONFIG_COMPLETION-THRESHOLD-CHECK_COMPLETION-RATE
+      value: "95"
+    - name: CLOUD_AWS_REGION_STATIC
+      valueFrom:
+        secretKeyRef:
+          name: ph-ee-connector-bulk-secret
+          key: aws-region
+    - name: BP_JAVA_OPTS
+      value: "-Xmx400m -Xms400m"
+    - name: CLOUD_AWS_S3BASEURL
+      value: "http://minio:9000"
+    - name: AWS_ACCESS_KEY
+      valueFrom:
+        secretKeyRef:
+          name: ph-ee-connector-bulk-secret
+          key: aws-access-key
+    - name: AWS_SECRET_KEY
+      valueFrom:
+        secretKeyRef:
+          name: ph-ee-connector-bulk-secret
+          key: aws-secret-key
+    - name: IDENTITY_MAPPER_CONTACTPOINT
+      value: "http://ph-ee-identity-account-mapper:80"
 
-# ---
+---
 
-# apiVersion: gazelle.mifos.io/v1
-# kind: PaymentHubDeployment
-# metadata:
-#   name: ph-ee-connector-notifications
-#   namespace: paymenthub
-# spec:
-#   enabled: true
-#   volMount:
-#     enabled: false # Please confirm or adjust this section 
-#   replicas: 1
-#   image: docker.io/openmf/ph-ee-notifications:v1.4.0
-#   containerPort: 5000
-#   resources:
-#     limits:
-#       cpu: 500m # Adjust if different
-#       memory: 512M # Adjust if different
-#     requests:
-#       cpu: 100m # Adjust if different
-#       memory: 256M # Adjust if different
-#   rbacEnabled: false
-#   secretEnabled: true
-#   configMapEnabled: false
-#   ingressEnabled: true
-#   ingress:
-#     className: nginx
-#     annotations:
-#       kubernetes.io/ingress.class: nginx
-#     tls:
-#       - secretName: sandbox-secret
-#     rules:
-#       - host: notifications.local
-#         paths:
-#           - path: "/"
-#             pathType: ImplementationSpecific
-#             backend:
-#               service:
-#                 name: "ph-ee-connector-notifications"
-#                 port:
-#                   number: 80
-#   services:
-#     - name: ph-ee-connector-notifications
-#       ports:
-#         - name: port
-#           port: 80
-#           targetPort: 5000
-#           protocol: TCP
-#         - name: actuator
-#           port: 8080
-#           targetPort: 8080
-#           protocol: TCP
-#       selector:
-#         app: ph-ee-connector-notifications
-#       sessionAffinity: None
-#       type: ClusterIP
-#   environment:
-#     - name: SPRING_PROFILES_ACTIVE
-#       value: 
-#     - name: ZEEBE_BROKER_CONTACTPOINT
-#       value: "phee-zeebe-gateway:26500"
-#     - name: HOSTCONFIG_HOST
-#       value: "message-gateway"
-#     - name: HOSTCONFIG_PORT
-#       value: "80"
-#     - name: MESSAGEGATEWAYCONFIG_HOST
-#       value: "message-gateway"
-#     - name: NOTIFICATION_LOCAL_HOST
-#       value: "connector-notifications"
-#     - name: NOTIFICATION_SUCCESS_ENABLED
-#       value: "false"
-#     - name: NOTIFICATION_FAILURE_ENABLED
-#       value: "false"
-#     - name: LOGGING_LEVEL_ROOT
-#       value: "INFO"
+apiVersion: gazelle.mifos.io/v1
+kind: PaymentHubDeployment
+metadata:
+  name: ph-ee-operations-web
+  namespace: paymenthub
+spec:
+  enabled: true
+  volMount:
+    enabled: true
+    name: ph-ee-operations-web-configmap
+  replicas: 1
+  image: docker.io/openmf/ph-ee-operations-web:v1.20.0
+  containerPort: 80
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512M
+    requests:
+      cpu: 100m
+      memory: 256M
+  rbacEnabled: false
+  secretEnabled: false
+  configMapEnabled: true
+  ingressEnabled: true
+  ingress:
+    className: nginx
+    annotations:
+      meta.helm.sh/release-name: phee
+      meta.helm.sh/release-namespace: paymenthub
+    tls:
+      - secretName: sandbox-secret
+    rules:
+      - host: ops.local
+        paths:
+          - path: "/"
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: "ph-ee-operations-web"
+                port:
+                  number: 4200
+  services:
+    - name: ph-ee-operations-web
+      ports:
+        - name: port
+          port: 4200
+          targetPort: 80
+          protocol: TCP
+      selector:
+        app: ph-ee-operations-web
+      sessionAffinity: None
+      type: ClusterIP
+  environment:
+    - name: PH_OPS_BACKEND_SERVER_URL
+      value: "http://ph-ee-operations-app"
+    - name: PH_VOU_BACKEND_SERVER_URL
+      value: "http://ph-ee-vouchers"
+    - name: PH_ACT_BACKEND_SERVER_URL
+      value: "http://ph-ee-identity-account-mapper"
+    - name: PH_PLATFORM_TENANT_ID
+      value: "gorilla"
+    - name: PH_PLATFORM_TENANT_IDS
+      value: "gorilla"
+    - name: PH_REGISTERING_INSTITUTION_ID
+      value: "123"
+    - name: PH_AUTH_ENABLED
+      value: "false"
+    - name: PH_OAUTH_ENABLED
+      value: "false"
+    - name: PH_OAUTH_TYPE
+      value: "keycloak"
+    - name: PH_OAUTH_SERVER_URL
+      value: "http://keycloak.sandbox.fynarfin.io/auth"
+    - name: PH_OAUTH_REALM
+      value: "paymenthub"
+    - name: PH_OAUTH_CLIENT_ID
+      value: "opsapp"
+    - name: PH_OAUTH_CLIENT_SECRET
+      value: "Y2xpZW50Og=="
+    - name: PH_OAUTH_BASIC_AUTH
+      value: "true"
+    - name: PH_OAUTH_BASIC_AUTH_TOKEN
+      value: "Y2xpZW50Og=="
+    - name: PH_DEFAULT_LANGUAGE
+      value: "en"
+    - name: PH_SUPPORTED_LANGUAGES
+      value: "en,fr,es"
 
+---
 
-# ---
+apiVersion: gazelle.mifos.io/v1
+kind: PaymentHubDeployment
+metadata:
+  name: ph-ee-connector-notifications
+  namespace: paymenthub
+spec:
+  enabled: true
+  volMount:
+    enabled: false # Please confirm or adjust this section 
+  replicas: 1
+  image: docker.io/openmf/ph-ee-notifications:v1.4.0
+  containerPort: 5000
+  resources:
+    limits:
+      cpu: 500m # Adjust if different
+      memory: 1G # Adjust if different
+    requests:
+      cpu: 100m # Adjust if different
+      memory: 512M # Adjust if different
+  rbacEnabled: false
+  secretEnabled: true
+  configMapEnabled: false
+  ingressEnabled: true
+  ingress:
+    className: nginx
+    annotations:
+      kubernetes.io/ingress.class: nginx
+    tls:
+      - secretName: sandbox-secret
+    rules:
+      - host: notifications.local
+        paths:
+          - path: "/"
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: "ph-ee-connector-notifications"
+                port:
+                  number: 80
+  services:
+    - name: ph-ee-connector-notifications
+      ports:
+        - name: port
+          port: 80
+          targetPort: 5000
+          protocol: TCP
+        - name: actuator
+          port: 8080
+          targetPort: 8080
+          protocol: TCP
+      selector:
+        app: ph-ee-connector-notifications
+      sessionAffinity: None
+      type: ClusterIP
+  environment:
+    - name: SPRING_PROFILES_ACTIVE
+      value: 
+    - name: ZEEBE_BROKER_CONTACTPOINT
+      value: "phee-zeebe-gateway:26500"
+    - name: HOSTCONFIG_HOST
+      value: "message-gateway"
+    - name: HOSTCONFIG_PORT
+      value: "80"
+    - name: MESSAGEGATEWAYCONFIG_HOST
+      value: "message-gateway"
+    - name: NOTIFICATION_LOCAL_HOST
+      value: "connector-notifications"
+    - name: NOTIFICATION_SUCCESS_ENABLED
+      value: "false"
+    - name: NOTIFICATION_FAILURE_ENABLED
+      value: "false"
+    - name: LOGGING_LEVEL_ROOT
+      value: "INFO"
 
-# apiVersion: gazelle.mifos.io/v1
-# kind: PaymentHubDeployment
-# metadata:
-#   name: ph-ee-connector-bulk
-#   namespace: paymenthub
-# spec:
-#   enabled: true
-#   volMount:
-#     enabled: true
-#     name: ph-ee-config
-#   replicas: 1
-#   image: docker.io/openmf/ph-ee-bulk-processor:v1.12.1
-#   containerPort: 5000
-#   resources:
-#     limits:
-#       cpu: 256m
-#       memory: 384M
-#     requests:
-#       cpu: 100m
-#       memory: 256M
-#   rbacEnabled: false  # Assuming RBAC is not enabled; adjust if needed
-#   secretEnabled: true
-#   configMapEnabled: true
-#   ingressEnabled: true
-#   ingress:
-#     className: nginx
-#     annotations:
-#       kubernetes.io/ingress.class: nginx
-#       konghq.com/plugins: cors
-#       meta.helm.sh/release-name: phee
-#       meta.helm.sh/release-namespace: paymenthub
-#     tls:
-#       - secretName: sandbox-secret
-#     rules:
-#       - host: bulk-connector.local
-#         paths:
-#           - path: "/"
-#             pathType: ImplementationSpecific
-#             backend:
-#               service:
-#                 name: "ph-ee-connector-bulk"
-#                 port:
-#                   number: 8443
-#   services:
-#     - name: ph-ee-connector-bulk
-#       ports:
-#         - name: port
-#           port: 8443
-#           targetPort: 8443
-#           protocol: TCP
-#       selector:
-#         app: ph-ee-connector-bulk
-#       sessionAffinity: None
-#       type: ClusterIP
-#   environment:
-#     - name: SPRING_PROFILES_ACTIVE
-#       value: "bb"
-#     - name: CAMEL_DISABLE-SSL
-#       value: "true"
-#     - name: ZEEBE_BROKER_CONTACTPOINT
-#       value: "phee-zeebe-gateway:26500"
-#     - name: ZEEBE_CLIENT_MAX-EXECUTION-THREADS
-#       value: "50"
-#     - name: ZEEBE_CLIENT_POLL-INTERVAL
-#       value: "10"
-#     - name: TENANTS
-#       value: "rhino,gorilla,wakanda,pluto,venus,jupiter"
-#     - name: APPLICATION_BUCKET-NAME
-#       value: "paymenthub-ee"
-#     - name: OPERATIONS-APP_CONTACTPOINT
-#       value: "http://ph-ee-operations-app:80"
-#     - name: OPERATIONS-APP_ENDPOINTS_BATCH-TRANSACTION
-#       value: "/api/v1/batch/transactions"
-#     - name: CONFIG_PARTYLOOKUP_ENABLE
-#       value: "false"
-#     - name: CONFIG_APPROVAL_ENABLE
-#       value: "false"
-#     - name: CONFIG_ORDERING_ENABLE
-#       value: "false"
-#     - name: CONFIG_SPLITTING_ENABLE
-#       value: "true"
-#     - name: CONFIG_SPLITTING_SUB_BATCH_SIZE
-#       value: "5"
-#     - name: CONFIG_FORMATTING_ENABLE
-#       value: "false"
-#     - name: CONFIG_FORMATTING_STANDARD
-#       value: "DEFAULT"
-#     - name: CONFIG_MERGEBACK_ENABLE
-#       value: "true"
-#     - name: CONFIG_BACKPRESSURE_ENABLE
-#       value: "false"
-#     - name: CONFIG_COMPLETION-THRESHOLD-CHECK_ENABLE
-#       value: "true"
-#     - name: CONFIG_COMPLETION-THRESHOLD-CHECK_COMPLETION-RATE
-#       value: "95"
-#     - name: CLOUD_AWS_REGION_STATIC
-#       valueFrom:
-#         secretKeyRef:
-#           name: bulk-processor-secret
-#           key: aws-region
-#     - name: BP_JAVA_OPTS
-#       value: "-Xmx400m -Xms400m"
-#     - name: CLOUD_AWS_S3BASEURL
-#       value: "http://minio:9000"
-#     - name: AWS_ACCESS_KEY
-#       valueFrom:
-#         secretKeyRef:
-#           name: bulk-processor-secret
-#           key: aws-access-key
-#     - name: AWS_SECRET_KEY
-#       valueFrom:
-#         secretKeyRef:
-#           name: bulk-processor-secret
-#           key: aws-secret-key
-#     - name: IDENTITY_MAPPER_CONTACTPOINT
-#       value: "http://ph-ee-identity-account-mapper:80"
-
-# ---
-
-# apiVersion: gazelle.mifos.io/v1
-# kind: PaymentHubDeployment
-# metadata:
-#   name: message-gateway
-#   namespace: paymenthub
-# spec:
-#   enabled: true
-#   volMount:
-#     enabled: true
-#     name: ph-ee-config  # This is from the pod description.
-#   replicas: 1
-#   image: docker.io/openmf/message-gateway:v1.2.0  # From the pod description.
-#   containerPort: 9191  # From the pod description.
-#   resources:
-#     limits:
-#       cpu: 500m
-#       memory: 512M
-#     requests:
-#       cpu: 100m
-#       memory: 256M 
-#   rbacEnabled: false
-#   secretEnabled: true
-#   configMapEnabled: false
-#   ingressEnabled: true
-#   ingress:
-#     className: nginx  # From ingress description.
-#     annotations:
-#       kubernetes.io/ingress.class: nginx
-#     tls:
-#       - secretName: sandbox-secret  # From ingress description.
-#     rules:
-#       - host: messagegateway.local  # From ingress description.
-#         paths:
-#           - path: "/"
-#             pathType: ImplementationSpecific
-#             backend:
-#               service:
-#                 name: "message-gateway"
-#                 port:
-#                   number: 80  # From service description.
-#   services:
-#     - name: message-gateway
-#       ports:
-#         - name: port
-#           port: 80
-#           targetPort: 9191  # From service description.
-#           protocol: TCP
-#       selector:
-#         app: message-gateway
-#       sessionAffinity: None
-#       type: ClusterIP
-#   environment:
-#     - name: SPRING_DATASOURCE_URL
-#       value: "jdbc:mysql:thin://operationsmysql:3306/messagegateway"
-#     - name: MYSQL_USERNAME
-#       value: "mifos"
-#     - name: ZEEBE_BROKER_CONTACTPOINT
-#       value: "phee-zeebe-gateway:26500"
-#     - name: MYSQL_PASSWORD
-#       valueFrom:
-#         secretKeyRef:
-#           name: message-gateway-secret
-#           key: database-password
-#     - name: CALLBACKCONFIG_HOST
-#       value: "ph-ee-connector-notifications"
-#     - name: HOSTCONFIG_HOST
-#       value: "message-gateway"
-#     - name: PROVIDERSOURCE_FROMDATABASE
-#       value: "disabled"
-#     - name: PROVIDERSOURCE_FROMYML
-#       value: "enabled"
-#     - name: LOGGING_LEVEL_ROOT
-#       value: "INFO"
-#     - name: PROVIDERKEYS_TELERIVETAPIKEY
-#       valueFrom:
-#         secretKeyRef:
-#           name: message-gateway-secret
-#           key: api-key
-#     - name: PROVIDERKEYS_TELERIVETPROJECTID
-#       valueFrom:
-#         secretKeyRef:
-#           name: message-gateway-secret
-#           key: project-id
-#     - name: ZEEBE_BROKER_CONTACTPOINT
-#       value: "phee-zeebe-gateway:26500"
- 

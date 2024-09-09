@@ -9,13 +9,8 @@ public class PaymentHubDeploymentSpec {
     private Integer replicas;
     private String image;
     private Integer containerPort;
-    private String springProfilesActive;
-    private Datasource datasource;
-    private Resources resources;
-    private Logging logging;
-    private String javaToolOptions;
-    private String bucketName;
-    private Probe livenessProbe;
+     private Resources resources;
+     private Probe livenessProbe;
     private Probe readinessProbe;
     private Boolean rbacEnabled;
     private Boolean secretEnabled;
@@ -29,12 +24,9 @@ public class PaymentHubDeploymentSpec {
     public PaymentHubDeploymentSpec() {
     }
 
-    public PaymentHubDeploymentSpec(Boolean enabled, Map<String, String> labels, VolMount volMount, Integer replicas, String image, Integer containerPort, String springProfilesActive,
-                                 Datasource datasource, Resources resources, Logging logging,
-                                 String javaToolOptions, String bucketName,
-                                 Probe livenessProbe, Probe readinessProbe,
-                                 Boolean rbacEnabled, Boolean secretEnabled,
-                                 Boolean configMapEnabled, Boolean ingressEnabled,
+    public PaymentHubDeploymentSpec(Boolean enabled, Map<String, String> labels, VolMount volMount, Integer replicas, String image, 
+                                 Integer containerPort, Resources resources, Probe livenessProbe, Probe readinessProbe,
+                                 Boolean rbacEnabled, Boolean secretEnabled, Boolean configMapEnabled, Boolean ingressEnabled,
                                  Ingress ingress, List<Service> services, List<EnvironmentVariable> environment, Boolean initContainerEnabled) {
         this.enabled = enabled;
         this.labels = labels;
@@ -42,12 +34,7 @@ public class PaymentHubDeploymentSpec {
         this.replicas = replicas;
         this.image = image;
         this.containerPort = containerPort;
-        this.springProfilesActive = springProfilesActive;
-        this.datasource = datasource;
         this.resources = resources;
-        this.logging = logging;
-        this.javaToolOptions = javaToolOptions;
-        this.bucketName = bucketName;
         this.livenessProbe = livenessProbe;
         this.readinessProbe = readinessProbe;
         this.rbacEnabled = rbacEnabled;
@@ -108,52 +95,12 @@ public class PaymentHubDeploymentSpec {
         this.containerPort = containerPort;
     }
 
-    public String getSpringProfilesActive() {
-        return springProfilesActive;
-    }
-
-    public void setSpringProfilesActive(String springProfilesActive) {
-        this.springProfilesActive = springProfilesActive;
-    }
-
-    public Datasource getDatasource() {
-        return datasource;
-    }
-
-    public void setDatasource(Datasource datasource) {
-        this.datasource = datasource;
-    }
-
     public Resources getResources() {
         return resources;
     }
 
     public void setResources(Resources resources) {
         this.resources = resources;
-    }
-
-    public Logging getLogging() {
-        return logging;
-    }
-
-    public void setLogging(Logging logging) {
-        this.logging = logging;
-    }
-
-    public String getJavaToolOptions() {
-        return javaToolOptions;
-    }
-
-    public void setJavaToolOptions(String javaToolOptions) {
-        this.javaToolOptions = javaToolOptions;
-    }
-
-    public String getBucketName() {
-        return bucketName;
-    }
-
-    public void setBucketName(String bucketName) {
-        this.bucketName = bucketName;
     }
 
     public Probe getLivenessProbe() {
@@ -246,12 +193,7 @@ public class PaymentHubDeploymentSpec {
                 ", replicas=" + replicas +
                 ", image='" + image + '\'' +
                 ", containerPort=" + containerPort +
-                ", springProfilesActive='" + springProfilesActive + '\'' +
-                ", datasource=" + datasource +
                 ", resources=" + resources +
-                ", logging=" + logging +
-                ", javaToolOptions='" + javaToolOptions + '\'' +
-                ", bucketName='" + bucketName + '\'' +
                 ", livenessProbe=" + livenessProbe +
                 ", readinessProbe=" + readinessProbe +
                 ", rbacEnabled=" + rbacEnabled +
@@ -276,12 +218,7 @@ public class PaymentHubDeploymentSpec {
                Objects.equals(getReplicas(), that.getReplicas()) &&
                Objects.equals(getImage(), that.getImage()) &&
                Objects.equals(getContainerPort(), that.getContainerPort()) &&
-               Objects.equals(getSpringProfilesActive(), that.getSpringProfilesActive()) &&
-               Objects.equals(getDatasource(), that.getDatasource()) &&
                Objects.equals(getResources(), that.getResources()) &&
-               Objects.equals(getLogging(), that.getLogging()) &&
-               Objects.equals(getJavaToolOptions(), that.getJavaToolOptions()) &&
-               Objects.equals(getBucketName(), that.getBucketName()) &&
                Objects.equals(getLivenessProbe(), that.getLivenessProbe()) &&
                Objects.equals(getReadinessProbe(), that.getReadinessProbe()) &&
                Objects.equals(getRbacEnabled(), that.getRbacEnabled()) &&
@@ -296,10 +233,9 @@ public class PaymentHubDeploymentSpec {
 
     @Override
     public int hashCode() {
-        return Objects.hash(getEnabled(), getLabels(), getVolMount(), getReplicas(), getImage(), getContainerPort(), getSpringProfilesActive(),
-                            getDatasource(), getResources(), getLogging(), getJavaToolOptions(), getBucketName(),
-                            getLivenessProbe(), getReadinessProbe(), getRbacEnabled(), getSecretEnabled(), getConfigMapEnabled(),
-                            getIngressEnabled(), getIngress(), getServices(), getEnvironment(), getInitContainerEnabled());
+        return Objects.hash(getEnabled(), getLabels(), getVolMount(), getReplicas(), getImage(), getContainerPort(), 
+                            getResources(), getLivenessProbe(), getReadinessProbe(), getRbacEnabled(), getSecretEnabled(), 
+                            getConfigMapEnabled(), getIngressEnabled(), getIngress(), getServices(), getEnvironment(), getInitContainerEnabled());
     }
 
     // Inner classes for nested objects 
@@ -351,93 +287,6 @@ public class PaymentHubDeploymentSpec {
         @Override
         public int hashCode() {
             return Objects.hash(enabled, name);
-        }
-    }
-
-    public static class Datasource {
-        private String username;
-        private String password;
-        private String host;
-        private Integer port;
-        private String schema;
-
-        public Datasource() {
-        }
-
-        public Datasource(String username, String password, String host, Integer port, String schema) {
-            this.username = username;
-            this.password = password;
-            this.host = host;
-            this.port = port;
-            this.schema = schema;
-        }
-
-        public String getUsername() {
-            return username;
-        }
-
-        public void setUsername(String username) {
-            this.username = username;
-        }
-
-        public String getPassword() {
-            return password;
-        }
-
-        public void setPassword(String password) {
-            this.password = password;
-        }
-
-        public String getHost() {
-            return host;
-        }
-
-        public void setHost(String host) {
-            this.host = host;
-        }
-
-        public Integer getPort() {
-            return port;
-        }
-
-        public void setPort(Integer port) {
-            this.port = port;
-        }
-
-        public String getSchema() {
-            return schema;
-        }
-
-        public void setSchema(String schema) {
-            this.schema = schema;
-        }
-
-        @Override
-        public String toString() {
-            return "Datasource{" +
-                    "username='" + username + '\'' +
-                    ", password='[PROTECTED]'" +
-                    ", host='" + host + '\'' +
-                    ", port=" + port +
-                    ", schema='" + schema + '\'' +
-                    '}';
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (!(o instanceof Datasource)) return false;
-            Datasource that = (Datasource) o;
-            return Objects.equals(getUsername(), that.getUsername()) &&
-                   Objects.equals(getPassword(), that.getPassword()) &&
-                   Objects.equals(getHost(), that.getHost()) &&
-                   Objects.equals(getPort(), that.getPort()) &&
-                   Objects.equals(getSchema(), that.getSchema());
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(getUsername(), getPassword(), getHost(), getPort(), getSchema());
         }
     }
 
@@ -540,57 +389,6 @@ public class PaymentHubDeploymentSpec {
         @Override
         public int hashCode() {
             return Objects.hash(getCpu(), getMemory());
-        }
-    }
-
-    public static class Logging {
-        private String levelRoot;
-        private String patternConsole;
-
-        public Logging() {
-        }
-
-        public Logging(String levelRoot, String patternConsole) {
-            this.levelRoot = levelRoot;
-            this.patternConsole = patternConsole;
-        }
-
-        public String getLevelRoot() {
-            return levelRoot;
-        }
-
-        public void setLevelRoot(String levelRoot) {
-            this.levelRoot = levelRoot;
-        }
-
-        public String getPatternConsole() {
-            return patternConsole;
-        }
-
-        public void setPatternConsole(String patternConsole) {
-            this.patternConsole = patternConsole;
-        }
-
-        @Override
-        public String toString() {
-            return "Logging{" +
-                    "levelRoot='" + levelRoot + '\'' +
-                    ", patternConsole='" + patternConsole + '\'' +
-                    '}';
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (!(o instanceof Logging)) return false;
-            Logging that = (Logging) o;
-            return Objects.equals(getLevelRoot(), that.getLevelRoot()) &&
-                   Objects.equals(getPatternConsole(), that.getPatternConsole());
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(getLevelRoot(), getPatternConsole());
         }
     }
 

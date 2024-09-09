@@ -1,9 +1,12 @@
 package com.paymenthub.utils;
 
 import io.fabric8.kubernetes.client.KubernetesClient;
+import io.fabric8.kubernetes.api.model.Service; 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.paymenthub.customresource.PaymentHubDeployment;
+import java.util.List; 
+
 
 /**
  * Utility class for handling the deletion of Kubernetes resources associated with a custom resource.
@@ -41,6 +44,8 @@ public class DeletionUtil {
 
         // Delete Ingress
         deleteIngressResources(kubernetesClient, resource);
+
+        deleteService(kubernetesClient, resource);
     }
 
     /**
@@ -157,6 +162,47 @@ public class DeletionUtil {
             log.info("Deleted Ingress: {}", ingressName);
         } else {
             log.warn("Ingress {} not found, skipping deletion.", ingressName);
+        }
+    }
+
+    /**
+     * Deletes the services specified in the custom resource from the Kubernetes cluster.
+     * 
+     * This method iterates over the list of services defined in the custom resource's spec and deletes each service
+     * from the specified namespace if it exists. 
+     * 
+     * @param kubernetesClient The Kubernetes client used to interact with the Kubernetes API.  
+     * @param resource The custom resource containing the list of services to be deleted.  
+     */
+    public static void deleteService(KubernetesClient kubernetesClient, PaymentHubDeployment resource) {
+        String namespace = resource.getMetadata().getNamespace();
+        
+        // Use fully qualified name for custom Service class
+        List<com.paymenthub.customresource.PaymentHubDeploymentSpec.Service> services = resource.getSpec().getServices();
+        
+        if (services != null && !services.isEmpty()) {
+            for (com.paymenthub.customresource.PaymentHubDeploymentSpec.Service service : services) {
+                String serviceName = service.getName(); // Use fully qualified name for custom Service class
+                
+                // Check if the service exists in the namespace
+                io.fabric8.kubernetes.api.model.Service existingService = kubernetesClient.services()
+                        .inNamespace(namespace)
+                        .withName(serviceName)
+                        .get();
+
+                if (existingService != null) {
+                    // Delete the service if it exists
+                    kubernetesClient.services()
+                            .inNamespace(namespace)
+                            .withName(serviceName)
+                            .delete();
+                    log.info("Deleted Service: {}", serviceName);
+                } else {
+                    log.warn("Service {} not found, skipping deletion.", serviceName);
+                }
+            }
+        } else {
+            log.warn("No services found in the spec, skipping service deletion.");
         }
     }
 }

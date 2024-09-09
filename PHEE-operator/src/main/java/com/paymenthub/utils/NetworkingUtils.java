@@ -37,26 +37,35 @@ public class NetworkingUtils {
         List<Service> desiredServices = createServices(resource);
         log.debug("Desired Service specs: {}", desiredServices.stream().map(Service::toString).collect(Collectors.joining(", ")));
 
+        // Get the list of existing services in the namespace
         List<Service> existingServices = kubernetesClient.services()
                 .inNamespace(resource.getMetadata().getNamespace())
                 .list()
                 .getItems()
                 .stream()
-                .filter(service -> desiredServices.stream().anyMatch(desiredService -> desiredService.equals(service)))
+                .filter(service -> desiredServices.stream().anyMatch(desiredService -> desiredService.getMetadata().getName().equals(service.getMetadata().getName())))
                 .collect(Collectors.toList());
 
         for (Service desiredService : desiredServices) {
             Optional<Service> existingServiceOpt = existingServices.stream()
-                    .filter(existingService -> existingService.equals(desiredService))
+                    .filter(existingService -> existingService.getMetadata().getName().equals(desiredService.getMetadata().getName()))
                     .findFirst();
 
             if (existingServiceOpt.isPresent()) {
-                kubernetesClient.services()
-                        .inNamespace(resource.getMetadata().getNamespace())
-                        .withName(existingServiceOpt.get().getMetadata().getName())
-                        .patch(desiredService);
-                log.info("Updated existing Service: {}", desiredService.getMetadata().getName());
+                Service existingService = existingServiceOpt.get();
+
+                // Compare the specs and only update if necessary
+                if (!areServicesEqual(existingService, desiredService)) {
+                    kubernetesClient.services()
+                            .inNamespace(resource.getMetadata().getNamespace())
+                            .withName(existingService.getMetadata().getName())
+                            .patch(desiredService); // Apply a patch instead of replacing the service
+                    log.info("Updated existing Service: {}", desiredService.getMetadata().getName());
+                } else {
+                    log.info("Service is up-to-date: {}", desiredService.getMetadata().getName());
+                }
             } else {
+                // Create the service if it doesn't exist
                 kubernetesClient.services()
                         .inNamespace(resource.getMetadata().getNamespace())
                         .create(desiredService);
@@ -64,6 +73,15 @@ public class NetworkingUtils {
             }
         }
     }
+
+    // Helper method to compare services based on significant fields
+    private boolean areServicesEqual(Service existingService, Service desiredService) {
+        // Compare important fields such as spec, ports, selectors, etc.
+        return Objects.equals(existingService.getSpec().getPorts(), desiredService.getSpec().getPorts())
+                && Objects.equals(existingService.getSpec().getSelector(), desiredService.getSpec().getSelector())
+                && Objects.equals(existingService.getSpec().getType(), desiredService.getSpec().getType());
+    }
+
 
     /**
      * Creates a list of Kubernetes Service objects based on the custom resource specifications.
