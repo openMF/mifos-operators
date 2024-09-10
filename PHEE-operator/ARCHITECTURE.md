@@ -1,6 +1,6 @@
 # PHEE Operator Architecture
 
-This document provides a quick overview of the architecture of the PHEE Operator, detailing the components this operator.
+This document provides a quick overview of the architecture of the PHEE Operator.
 
 ## Repo Structure
 

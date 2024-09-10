@@ -9,7 +9,7 @@ This is a Kubernetes (K8s) Operator setup built on top of the [Mifos-Gazelle scr
 ### Links to Other Docs
 
 - Refer to this documentation for a quick overview of the architecture and repository structure: [Architecture Overview](ARCHITECTURE.md)
-- Refer to this documentation for an in-depth understanding of each file's purpose, how to modify the CR for configuration changes, and how to add new configurations to deployments: [Developer Guide](DEVELOPER_GUIDE.md)
+- Refer to this documentation for an in-depth understanding of each file's purpose: [Developer Guide](DEVELOPER_GUIDE.md)
 
 ## Table of Contents
 
@@ -77,13 +77,13 @@ If you prefer to manually set up the operator without using the script, follow t
 #### 1. Install Maven Dependencies
 
 ```
-mvn clean install
+mvn clean package
 ```
 
 #### 2. Create a Local Docker Image Using Maven Jib
 
 ```
-mvn compile jib:dockerBuild -Dimage=ph-ee-operator:latest
+docker build -t ph-ee-operator:latest .
 ```
 
 #### 3. Save the Docker Image to a Tar File
@@ -125,7 +125,7 @@ For example, if you want to change the resource requests and limits of a deploym
 
 Note: 
 Some configuration values that are not used by many deployments are hardcoded in the operator's code. If you need to change these hardcoded values, you must modify the operator code itself and redeploy the operator.
-  - RBACs related cannot be changed using Custom Resource (CR), only enable/disable flag present.
+  - RBACs related configurations cannot be changed using Custom Resource (CR), only enable/disable flag present.
   - configmap path for volmount is hardcoded, and configmap itself has hardcoded values.
   - initcontainer (waith-db) related configurations are also hardcoded.
   
@@ -140,7 +140,7 @@ If you want to add new configurations to the deployment, follow these steps:
 
 3. **Modify Operator Logic**: Update the operator's logic to handle the new configuration. Use the getters to retrieve the values from the CR (an instance of the CRD) and integrate them into the necessary resource creation or reconciliation processes.
 
-By following these steps, you can extend the functionality of the operator to manage additional configurations dynamically.
+By following these steps, you can extend the functionality of the operator to manage additional configurations dynamically using CR.
 
 ## Note 
 
@@ -148,4 +148,5 @@ By following these steps, you can extend the functionality of the operator to ma
 - The script should be run from the directory where it is located and the operator repo should be in the same directory as `mifos-gazelle`.
 - The `deploy` mode will upgrade the Helm chart, build the Docker image, deploy the operator with its CRD and CR, and verify its status in the k3s cluster.
 - The `cleanup` mode will remove the operator and all its related resources, allowing for a fresh setup if needed.
-- The `CR` and `operator` update modes allow you to apply updates specifically to the CR or the operator deployment, respectively, without a full redeployment.
+- The `CR` present in the repo is created and tested in 16Gb 4vcpus system, so the resource usage for deployments are set according to that.
+- Probes have not been set up or added to the deployment configurations yet (the logic is present in the code but not currently used).
