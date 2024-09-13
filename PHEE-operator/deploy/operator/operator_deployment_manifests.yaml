@@ -24,7 +24,7 @@ spec:
     spec:
       containers:
         - name: operator
-          image: ph-ee-operator:latest # Use the locally built image
+          image: ph-ee-operator:latest # Operator image goes here
           imagePullPolicy: IfNotPresent
           env:
             - name: WATCH_NAMESPACE

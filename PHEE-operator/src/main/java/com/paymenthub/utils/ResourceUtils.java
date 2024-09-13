@@ -56,15 +56,27 @@ public class ResourceUtils {
      */
     private ConfigMap createConfigMap(PaymentHubDeployment resource, String name) {
         log.info("Creating ConfigMap spec for resource: " + resource.getMetadata().getName());
+        
+        Map<String, String> data = new HashMap<>();
+        data.put("configuration.properties", 
+            "oauth.enabled false\n" +
+            "oauth.basicAuth true\n" +
+            "oauth.basicAuthToken Y2xpZW50Og==\n" +
+            "oauth.serverUrl https://ops-bk.sandbox.mifos.io\n" +  
+            "serverUrl https://ops.sandbox.mifos.io\n"  +
+            "auth.enabled false\n" +
+            "auth.tenant phdefault");
+
         return new ConfigMapBuilder()
                 .withNewMetadata()
                     .withName(name)
                     .withNamespace(resource.getMetadata().getNamespace())
                     .withOwnerReferences(OwnerReferenceUtils.createOwnerReferences(resource))
                 .endMetadata()
-                .addToData("config-file-name", "config-file-content") // Add actual config data
+                .addToData(data) // Add the configuration properties data
                 .build();
     }
+
 
     /**
      * Reconciles the Secret for the given custom resource. Creates or updates the Secret as necessary.
@@ -99,14 +111,41 @@ public class ResourceUtils {
      */
     private Secret createSecret(PaymentHubDeployment resource, String secretName) {
         log.info("Creating Secret spec for resource: " + resource.getMetadata().getName());
-        return new SecretBuilder()
+
+        // Initialize the SecretBuilder with common metadata
+        SecretBuilder secretBuilder = new SecretBuilder()
                 .withNewMetadata()
                     .withName(secretName)
                     .withNamespace(resource.getMetadata().getNamespace())
                     .withOwnerReferences(OwnerReferenceUtils.createOwnerReferences(resource))
-                .endMetadata()
-                .addToData("database-password", Base64.getEncoder().encodeToString("password".getBytes()))
-                .build();
+                .endMetadata();
+
+        // Add access_key, secret_key, and aws-region only if the deployment is for ph-ee-connector-bulk
+        if ("ph-ee-connector-bulk".equals(resource.getMetadata().getName())) {
+            secretBuilder
+                .addToData("aws-access-key", Base64.getEncoder().encodeToString("root".getBytes()))
+                .addToData("aws-secret-key", Base64.getEncoder().encodeToString("password".getBytes()))
+                .addToData("aws-region", Base64.getEncoder().encodeToString("ap-south-1".getBytes()));
+
+            return secretBuilder.build();
+        }
+
+        // Add api-key, project-id, and database-password only if the deployment is for message-gateway
+        if ("message-gateway".equals(resource.getMetadata().getName())) {
+            secretBuilder
+                .addToData("api-key", Base64.getEncoder().encodeToString("<api-key>".getBytes()))
+                .addToData("project-id", Base64.getEncoder().encodeToString("<project-id>".getBytes()))
+                .addToData("database-password", Base64.getEncoder().encodeToString("password".getBytes()));
+
+            return secretBuilder.build();
+        }
+
+        // Add database-password for all other deployments
+        secretBuilder.addToData("database-password", Base64.getEncoder().encodeToString("password".getBytes()));
+
+        return secretBuilder.build();
     }
+
+
 
 }

@@ -1,10 +1,8 @@
 package com.paymenthub.utils;
 
 import com.paymenthub.customresource.PaymentHubDeployment;
-import com.paymenthub.customresource.PaymentHubDeploymentSpec;
-import com.paymenthub.customresource.PaymentHubDeploymentSpec.Datasource;
-import com.paymenthub.customresource.PaymentHubDeploymentSpec.Resources;
-import com.paymenthub.customresource.PaymentHubDeploymentSpec.Logging;
+import com.paymenthub.customresource.PaymentHubDeploymentSpec; 
+import com.paymenthub.customresource.PaymentHubDeploymentSpec.Resources; 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -25,25 +23,13 @@ public class LoggingUtil {
         PaymentHubDeploymentSpec spec = resource.getSpec();
         Integer replicas = spec.getReplicas();
         String image = spec.getImage();
-        String springProfilesActive = spec.getSpringProfilesActive();
-        Datasource datasource = spec.getDatasource();
         Resources resources = spec.getResources();
-        Logging loggingConfig = spec.getLogging();
-        String javaToolOptions = spec.getJavaToolOptions();
-        String bucketName = spec.getBucketName();
 
         // Log the name and desired state of the custom resource
         log.info("Reconciling PaymentHubDeployment: {}", resource.getMetadata().getName());
-        log.info("Desired state - Replicas: {}, Image: {}, Spring Profiles Active: {}, Java Tool Options: {}, Bucket Name: {}",
-                replicas, image, springProfilesActive, javaToolOptions, bucketName);
+        log.info("Desired state - Replicas: {}, Image: {}",
+                replicas, image);
 
-        // Log datasource configuration if available
-        if (datasource != null) {
-            log.info("Datasource Config - Username: {}, Host: {}, Port: {}, Schema: {}",
-                    datasource.getUsername(), datasource.getHost(), datasource.getPort(), datasource.getSchema());
-        } else {
-            log.warn("No Datasource Config specified in the Spec.");
-        }
 
         // Log resource limits and requests if available
         if (resources != null) {
@@ -62,14 +48,6 @@ public class LoggingUtil {
             }
         } else {
             log.warn("No Resource Config specified in the Spec.");
-        }
-
-        // Log logging configuration if available
-        if (loggingConfig != null) {
-            log.info("Logging Config - Level Root: {}, Pattern Console: {}",
-                    loggingConfig.getLevelRoot(), loggingConfig.getPatternConsole());
-        } else {
-            log.warn("No Logging Config specified in the Spec.");
         }
     }
 

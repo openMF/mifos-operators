@@ -47,9 +47,6 @@ spec:
                   type: string # Docker image used for the deployment
                 containerPort:
                   type: integer # Port on which the container listens
-                springProfilesActive:
-                  type: string # Spring profiles active for the application
-                  default: ""
                 environment:
                   type: array
                   items:
@@ -69,23 +66,6 @@ spec:
                                 type: string # Name of the secret
                               key:
                                 type: string # Key within the secret
-                datasource:
-                  type: object
-                  properties:
-                    username:
-                      type: string # Username for the datasource
-                      default: ""
-                    password:
-                      type: string # Password for the datasource
-                      default: ""
-                    host:
-                      type: string # Host of the datasource
-                      default: ""
-                    port:
-                      type: integer # Port of the datasource 
-                    schema:
-                      type: string # Schema of the datasource
-                      default: ""
                 resources:
                   type: object
                   properties:
@@ -103,21 +83,6 @@ spec:
                           type: string # CPU request for the container
                         memory:
                           type: string # Memory request for the container
-                logging:
-                  type: object
-                  properties:
-                    levelRoot:
-                      type: string # Logging level for root logger
-                      default: ""
-                    patternConsole:
-                      type: string # Logging pattern for console output
-                      default: ""
-                javaToolOptions:
-                  type: string # Java options for the container
-                  default: ""
-                bucketName:
-                  type: string # Name of the bucket (e.g., for storage)
-                  default: ""
                 livenessProbe:
                   type: object
                   properties:

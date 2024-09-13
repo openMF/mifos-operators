@@ -28,7 +28,7 @@ ph-ee-engine:
     enabled: false
 
   connector_bulk:
-    enabled: true
+    enabled: false
         
   zeebe_ops:
     enabled: false
